@@ -1,0 +1,195 @@
+CPR WEST COVINA — TODO
+======================
+Last updated: 2026-05-21
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 2 — CARRYOVER (do next)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] #15  Thank-you email scenario (post-class, 24hr after class ends)
+         - Trigger: scheduled daily, finds yesterday's confirmed classes
+         - Sends "Thanks for training with us!" email with:
+           * Google review request link
+           * 30BEATS promo code ($30 off for friends/family)
+           * Cross-sell: BLS → ACLS/PALS, Heartsaver → BLS, etc.
+         - Course-aware copy (uses the standard switch formula)
+
+[ ] #18  Stale pending cleanup scenario
+         - Trigger: daily 11 AM PT
+         - Finds status=pending records >14 days old where class date has passed
+         - Action: PATCH status=expired (keeps for analytics, removes from
+           active leads)
+         - Optionally: send "Last chance" final email before flipping status
+
+[ ] #4   Manual pay-click recovery button on dashboard
+         - On Leads tab, add a "🔔 Send recovery email now" button per row
+         - Wires to a new on-demand Make webhook that triggers the same
+           email as scenario 5118321 (COMEBACK30) without waiting for the
+           daily 10 AM run
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECURITY & HYGIENE (do this week)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] Rotate Make API tokens — TWO are exposed:
+       1. 4317021d-3786-4640-8265-34e63c0aaa2e  (in PROJECT.md, in HTTP
+          module auth headers inside scenarios 5124029, 5126180, 5130806)
+       2. c1ba1baf-6e88-4ff5-9e03-82f89c282bd9  (from current chat session)
+    After rotating in Make UI, update the embedded Authorization headers
+    in scenarios 5124029, 5126180, 5130806 — they'll break otherwise.
+
+[ ] Push Hero.jsx + MainBody.jsx to GitHub as backup
+    Currently lives only in Hostinger Horizons. One Horizons outage and
+    the homepage is gone. Copy both files into the GitHub repo as
+    /backup/Hero.jsx and /backup/MainBody.jsx.
+
+[ ] Make the cpr-dashboard GitHub repo private
+    Currently public; anyone can read your hardcoded token + datastore IDs.
+
+[ ] Delete the Vercel + GitHub Personal Access Tokens used during setup
+    Likely still active and granted broad scope.
+
+[ ] Add password rotation reminder
+    Dashboard footer already shows token age. When yours hits 60 days,
+    rotate it (Make → Profile → API → Add new token, delete old).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPERATIONAL IMPROVEMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] Rename scenarios to drop "BLS" prefix
+    Now that all scenarios are course-agnostic, the names are misleading:
+       5124029 "BLS Admin - Pay Click Alert" → "Pay-click Alert"
+       5118287 "BLS Reminder - 24hr Before"  → "24hr Class Reminder"
+       5118320 "BLS Team - Today's Roster"   → "Daily Class Roster"
+       5118321 "BLS Abandoned Booking"       → "Abandoned Booking Recovery"
+       5118322 "BLS Renewal Reminder"        → "Renewal Reminder"
+       5126180 "BLS Renewal - Pay Click"     → "Renewal Pay-click (legacy widget)"
+       5126033 "BLS System - Daily Health"   → "Daily Health Check"
+    Cosmetic only — they work either way.
+
+[ ] Add 3-minute delay to first customer nudge email (#9 from earlier)
+    Requires manually adding a Tools > Sleep module in scenario 5124029
+    via Make UI (the module's blueprint ID is not API-exposed).
+    Steps: open 5124029 → drag Tools > Sleep between HTTP PATCH and
+    Customer email → set delay = 180 seconds → save.
+
+[ ] Update PROJECT.md with:
+       - New scenario 5130806 "Pay-click 2-Hour Follow-up"
+       - Customer nudge email exists in 5124029 module 20 (corrects an
+         earlier inaccuracy)
+       - HEALTHCARE10, COMEBACK30, 30BEATS promo code map
+       - nudge2_sent field added to datastore (not in original schema)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MARKETING & GROWTH
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] Confirm 30BEATS promo code exists in Square ($30 off, family/friend)
+    Used in #15 thank-you email above.
+
+[ ] Push past 300 / 400 Google reviews
+    Single biggest free SEO lever. The #15 thank-you email contributes
+    here — needs the review CTA to be the FIRST thing in the email.
+
+[ ] Build dedicated city landing pages (SEO)
+    Pick 3–5 top cities (West Covina, Pasadena, Arcadia, Covina,
+    Baldwin Park) — write unique content per city: drive time, local
+    hospitals, testimonials from that city's students. Don't link the
+    smaller cities (La Puente, Glendora, etc.) — leave them as pills.
+    Doorway-page risk if every city gets a near-identical page.
+
+[ ] Customer LTV by source attribution
+    Group records by email, see who books multiple courses (BLS now,
+    ACLS later, renewal in 2yr). Helps decide which ad channels are
+    worth more spend.
+
+[ ] 2-hour day-of SMS via Twilio
+    "Class today at 10 AM. Park free at 100 Barranca, suite 255-B."
+    Twilio: ~$0.0075 per SMS, trivial cost.
+
+[ ] eCard delivery email with cross-sell
+    After class, when eCard is issued, send it via email with a "What's
+    next? ACLS/PALS for ER staff" footer.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DASHBOARD POLISH (lower priority)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] Strengthen dashboard auth
+    Currently the Vercel proxy gates by a single shared password (CPRWC).
+    Move to per-user logins or at minimum rotate the password periodically.
+
+[ ] Source attribution panel on Dashboard tab
+    Show paid-ad vs organic vs renewal split + per-source conversion rate.
+    Data is already tagged (`source` field in datastore); just needs UI.
+
+[ ] Revenue forecast widget
+    Sum of confirmed bookings × course price for next 7/30 days.
+
+[ ] Roster export button
+    One-click CSV/PDF of today's class roster for printing.
+
+[ ] No-show tracking
+    Add a "Mark no-show" button on past bookings. Auto-fires a "we missed
+    you, here's $20 off" email. Recovers ~15-20% of no-shows.
+
+[ ] "Did the email actually send?" indicator per booking
+    Pull last Gmail module status from Make logs, show ✓/✗ per record.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KNOWN ISSUES / WATCH LIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] Verify ACLS/PALS time constraint (Sun & Tue only, 12 PM) works
+    end-to-end on production homepage. Test booking should:
+       - Only show Sun & Tue dates in the picker
+       - Auto-select 12 PM – 4 PM time
+       - Pay-click + admin alert emails should reflect course + time
+       - 2hr follow-up should fire correctly if unpaid
+
+[ ] Heartsaver, ACLS, PALS calendar colors verified on real bookings
+    Currently only have BLS & PALS test data. Once a Heartsaver/ACLS
+    booking lands, confirm the calendar pill renders teal / purple.
+
+[ ] Square webhook still single-account
+    All Square Payment Links fire the same webhook. If you ever switch to
+    Sandbox testing or add a second location, double-check the webhook
+    subscription scope.
+
+[ ] Daily Health Check (scenario 5126033) email
+    Confirm you're actually receiving the 8 AM PT health report. If not,
+    check Gmail spam + verify the recipient filter.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COMPLETED THIS CHAT (for reference)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] Bug fix: PALS bookings showed as BLS in emails
+[x] Bug fix: 6+ duplicate confirmation emails on Square payment
+[x] Removed Arcadia from booking widget
+[x] Promo banner: Copy button on same line as code
+[x] ACLS/PALS Sun+Tue only at 12 PM in booking widget
+[x] Pipeline unified for all 5 courses (course_type derived from
+    booking_id prefix; switch formula handles all aliases)
+[x] Backfilled existing PALS records in datastore
+[x] Dashboard: Command bar with next-class countdown
+[x] Dashboard: Capacity heatmap on Calendar
+[x] Dashboard: Universal search (name/email/phone/booking_id)
+[x] Dashboard: Duplicate booking detector with banner
+[x] Dashboard: Inline edit for any booking
+[x] Dashboard: Health footer (Square webhook, scenarios, sync, token age)
+[x] Dashboard: Mobile responsive
+[x] Dashboard: 60s auto-refresh on all tabs
+[x] Calendar: Color-coded pills for all 5 courses
+[x] Customer nudge email added to pay-click scenario (was missing)
+[x] Customer nudge upgraded: reviews, promo urgency, reschedule, tap-to-call
+[x] Created 2-hour follow-up scenario (5130806)
+[x] PROJECT.md updated to reflect unified pipeline
