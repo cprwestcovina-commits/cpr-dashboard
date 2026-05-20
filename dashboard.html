@@ -757,7 +757,8 @@
     <div style="display:flex;flex-direction:column;gap:8px;">
       <button class="btn" onclick="actionReschedule()">🔄 Reschedule</button>
       <button class="btn" id="actionSourceBtn" onclick="actionToggleSource()"></button>
-      <button class="btn" onclick="actionCancel()" style="background:var(--red);color:#fff;">✖ Cancel Booking</button>
+      <button class="btn" onclick="actionCancel()" style="background:#fff;color:var(--red);border:1px solid var(--red);">✖ Mark Cancelled (keep record)</button>
+      <button class="btn" onclick="actionDelete()" style="background:var(--red);color:#fff;">🗑 Delete Permanently</button>
       <button class="btn" onclick="closeActions()" style="background:var(--gray-100);color:var(--gray-900);">Close</button>
     </div>
   </div>
@@ -807,9 +808,12 @@
         <option value="cancelled">Cancelled</option>
       </select>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
-      <button class="btn" onclick="closeEdit()" style="background:var(--gray-100);color:var(--gray-900);">Cancel</button>
-      <button class="btn" id="editSaveBtn" onclick="saveEdit()">Save</button>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px;flex-wrap:wrap;">
+      <button class="btn" onclick="actionDelete(editingKey)" style="background:#fff;color:var(--red);border:1px solid var(--red);">🗑 Delete</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="closeEdit()" style="background:var(--gray-100);color:var(--gray-900);">Cancel</button>
+        <button class="btn" id="editSaveBtn" onclick="saveEdit()">Save</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1246,12 +1250,72 @@ function renderLeads() {
           <td>${escapeHtml(fmtDate(r.data.date))}<br><span class="small">${escapeHtml(r.data.time_label || '')}</span></td>
           <td style="color:${ageColor};font-weight:600;">${days}d ago</td>
           <td>${courseLabel(r.data.course_type)}</td>
-          <td>
-            <a class="action-link" href="mailto:${escapeHtml(r.data.email)}?subject=About%20your%20CPR%20West%20Covina%20booking&body=Hi%20${encodeURIComponent(r.data.first_name || '')}%2C%0A%0AJust%20following%20up%20on%20your%20BLS%20booking%20request.%20Want%20me%20to%20hold%20your%20seat%3F">Follow up</a>
+          <td style="white-space:nowrap;">
+            <a class="action-link" href="mailto:${escapeHtml(r.data.email)}?subject=About%20your%20CPR%20West%20Covina%20booking&body=Hi%20${encodeURIComponent(r.data.first_name || '')}%2C%0A%0AJust%20following%20up%20on%20your%20booking%20request.%20Want%20me%20to%20hold%20your%20seat%3F">Follow up</a>
+            <button onclick="actionDelete('${escapeHtml(r.key)}')" title="Delete lead permanently" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:16px;margin-left:8px;padding:2px 4px;">🗑</button>
           </td>
         </tr>`;
       }).join('') + `</tbody></table>`
     : '<div class="empty">No pending leads. Nice.</div>';
+
+  // ---- Monthly revenue loss breakdown ----
+  renderMonthlyLeadLoss();
+}
+
+function renderMonthlyLeadLoss() {
+  // Group ALL non-confirmed records (pending + cancelled) by year-month of submitted_at,
+  // showing potential revenue that didn't close.
+  let host = document.getElementById('monthlyLossHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'monthlyLossHost';
+    host.style.marginTop = '24px';
+    document.querySelector('#page-leads .card').appendChild(host);
+  }
+  const buckets = {};
+  RECORDS.forEach(r => {
+    if (r.data.status === 'confirmed') return;  // only count unclosed
+    if (!r.data.submitted_at) return;
+    const ym = r.data.submitted_at.slice(0, 7);  // YYYY-MM
+    if (!buckets[ym]) buckets[ym] = { count: 0, revenue: 0, pending: 0, cancelled: 0 };
+    buckets[ym].count++;
+    buckets[ym].revenue += priceFor(r.data.course_type);
+    if (r.data.status === 'cancelled') buckets[ym].cancelled++;
+    else buckets[ym].pending++;
+  });
+  const months = Object.keys(buckets).sort().reverse();  // newest first
+  if (!months.length) { host.innerHTML = ''; return; }
+  const total = months.reduce((s, m) => s + buckets[m].revenue, 0);
+  const peak = Math.max(...months.map(m => buckets[m].revenue));
+
+  host.innerHTML = `
+    <h2 style="margin-bottom:6px;">Monthly Lost Revenue</h2>
+    <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">
+      Potential revenue from leads that submitted in each month but never paid (still pending or cancelled). Bars scaled to the peak month. Total across all months shown: <strong style="color:var(--red);">$${total.toLocaleString()}</strong>.
+    </p>
+    <table style="width:100%;">
+      <thead><tr>
+        <th>Month</th><th>Leads</th><th>Pending</th><th>Cancelled</th><th>Lost $</th><th style="width:40%;">Severity</th>
+      </tr></thead>
+      <tbody>
+        ${months.map(m => {
+          const b = buckets[m];
+          const pct = peak ? Math.round(100 * b.revenue / peak) : 0;
+          const monthLabel = new Date(m + '-01T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+          return `<tr>
+            <td><strong>${escapeHtml(monthLabel)}</strong></td>
+            <td>${b.count}</td>
+            <td style="color:var(--orange);">${b.pending}</td>
+            <td style="color:var(--gray-500);">${b.cancelled}</td>
+            <td><strong style="color:var(--red);">$${b.revenue.toLocaleString()}</strong></td>
+            <td><div style="background:var(--gray-100);height:18px;border-radius:4px;overflow:hidden;">
+              <div style="background:var(--red);height:100%;width:${pct}%;"></div>
+            </div></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
 }
 
 // === REVENUE ===
@@ -1428,6 +1492,42 @@ async function actionCancel() {
     await loadAll();
   } catch (e) {
     alert('Failed to cancel: ' + e.message);
+  }
+}
+
+// Permanently delete a record from the data store. Removes it from dashboard
+// (Leads, Students, Calendar all read from the same store). Does NOT delete
+// the Google Calendar event if one exists — that has to be removed manually
+// from cprwestcovina@gmail.com's calendar if the booking was confirmed.
+async function actionDelete(keyArg) {
+  const key = keyArg || actionsKey;
+  const r = RECORDS.find(x => x.key === key);
+  if (!r) return;
+  const wasConfirmed = r.data.status === 'confirmed';
+  let msg = `PERMANENTLY DELETE ${r.data.first_name} ${r.data.last_name}?\n\n`;
+  msg += `Email: ${r.data.email}\n`;
+  msg += `Date: ${fmtDate(r.data.date)} ${r.data.time_label || ''}\n`;
+  msg += `Status: ${r.data.status}\n\n`;
+  msg += `This removes the record from the dashboard (Leads, Students, Calendar).\n`;
+  if (wasConfirmed) {
+    msg += `\n⚠️ This was a CONFIRMED booking. The Google Calendar event on cprwestcovina@gmail.com will NOT be auto-deleted — remove it manually from Google Calendar.\n`;
+  }
+  msg += `\nThis cannot be undone. Continue?`;
+  if (!confirm(msg)) return;
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(key)}?teamId=${CONFIG.teamId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': authHeader() },
+    });
+    if (!res.ok) throw new Error('DELETE failed: ' + res.status);
+    closeActions();
+    closeEdit();
+    // Optimistically remove from in-memory state before reload
+    RECORDS = RECORDS.filter(x => x.key !== key);
+    render();
+    await loadAll();
+  } catch (e) {
+    alert('Failed to delete: ' + e.message);
   }
 }
 
