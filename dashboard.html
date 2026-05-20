@@ -200,6 +200,9 @@
   .pill.pending { background: var(--orange-light); color: var(--orange); }
   .pill.renewal { background: var(--blue-light); color: var(--blue); }
   .pill.bls { background: var(--red-light); color: var(--red); }
+  .pill.heartsaver { background: #E0F2F1; color: #16a085; }
+  .pill.acls { background: #F4ECF7; color: #8e44ad; }
+  .pill.pals { background: #FDEBD0; color: #d35400; }
 
   /* Calendar */
   .calendar-controls {
@@ -999,8 +1002,13 @@ function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function courseLabel(t) {
-  if (t === 'renewal') return '<span class="pill renewal">RENEWAL</span>';
-  return '<span class="pill bls">BLS</span>';
+  const ct = (t || '').replace(/^aha_/, '').toLowerCase();
+  if (ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') return '<span class="pill renewal">RENEWAL</span>';
+  if (ct === 'heartsaver' || ct === 'hs') return '<span class="pill heartsaver">HEARTSAVER</span>';
+  if (ct === 'acls') return '<span class="pill acls">ACLS</span>';
+  if (ct === 'pals') return '<span class="pill pals">PALS</span>';
+  if (ct === 'bls') return '<span class="pill bls">BLS</span>';
+  return '<span class="pill bls">' + (t ? t.toUpperCase() : 'BLS') + '</span>';
 }
 function statusPill(s) {
   if (s === 'confirmed') return '<span class="pill confirmed">PAID</span>';
