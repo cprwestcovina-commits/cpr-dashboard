@@ -427,6 +427,11 @@
           <button class="btn btn-sm" onclick="changeMonth(1)">Next ›</button>
           <button class="btn btn-sm" onclick="resetMonth()">Today</button>
         </div>
+        <div style="display:flex;gap:6px;margin:12px 0;">
+          <div class="filter-chip active" data-srcfilter="all" onclick="setSourceFilter('all')">All</div>
+          <div class="filter-chip" data-srcfilter="paid_ad" onclick="setSourceFilter('paid_ad')">💰 Paid Ad</div>
+          <div class="filter-chip" data-srcfilter="organic" onclick="setSourceFilter('organic')">🌱 Organic</div>
+        </div>
         <div id="calendar"></div>
         <div style="margin-top:14px; display:flex; gap:14px; font-size:12px; color: var(--gray-700);">
           <span><span style="display:inline-block;width:10px;height:10px;background:var(--red);border-radius:2px;vertical-align:middle;margin-right:4px;"></span>BLS</span>
@@ -547,6 +552,7 @@
     <div id="actionsSubtitle" style="color:var(--gray-700);font-size:14px;margin-bottom:20px;"></div>
     <div style="display:flex;flex-direction:column;gap:8px;">
       <button class="btn" onclick="actionReschedule()">🔄 Reschedule</button>
+      <button class="btn" id="actionSourceBtn" onclick="actionToggleSource()"></button>
       <button class="btn" onclick="actionCancel()" style="background:var(--red);color:#fff;">✖ Cancel Booking</button>
       <button class="btn" onclick="closeActions()" style="background:var(--gray-100);color:var(--gray-900);">Close</button>
     </div>
@@ -590,6 +596,7 @@ var DASHBOARD_PW = null;
 var RECORDS = [];
 var calendarMonth = new Date();
 var studentFilter = 'all';
+var sourceFilter = 'all';
 var currentTab = 'dashboard';
 
 window.addEventListener('load', () => {
@@ -882,13 +889,14 @@ function renderCalendarPage() {
   for (let d=1;d<=daysInMonth;d++) {
     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = dateStr === t;
-    const dayBookings = RECORDS.filter(r => r.data.date === dateStr);
+    const dayBookings = RECORDS.filter(r => r.data.date === dateStr && (sourceFilter === 'all' || (r.data.source || 'paid_ad') === sourceFilter));
     html += `<div class="cal-cell ${isToday?'today':''}">
       <div class="cal-num">${d}</div>
       <div class="cal-bookings">
         ${dayBookings.slice(0,5).map(r => {
           const cls = (r.data.course_type === 'renewal' ? 'renewal' : '') + (r.data.status !== 'confirmed' ? ' pending' : '');
-          return `<div class="cal-booking ${cls}" style="cursor:pointer;" onclick="openBookingActions('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name)} ${escapeHtml(r.data.last_name)} · ${escapeHtml(r.data.time_label)} · ${escapeHtml(r.data.status)} — click for actions">${escapeHtml(r.data.time_label || '?')} ${escapeHtml(r.data.first_name || '')}</div>`;
+          const adBadge = r.data.source === 'paid_ad' ? ' <span style="background:#FCEAE8;color:var(--red);padding:0 4px;border-radius:3px;font-size:9px;font-weight:700;">AD</span>' : '';
+          return `<div class="cal-booking ${cls}" style="cursor:pointer;" onclick="openBookingActions('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name)} ${escapeHtml(r.data.last_name)} · ${escapeHtml(r.data.time_label)} · ${escapeHtml(r.data.status)}${r.data.source ? ' · ' + escapeHtml(r.data.source) : ''} — click for actions">${escapeHtml(r.data.time_label || '?')} ${escapeHtml(r.data.first_name || '')}${adBadge}</div>`;
         }).join('')}
         ${dayBookings.length > 5 ? `<div class="small">+${dayBookings.length - 5} more</div>` : ''}
       </div>
@@ -1007,6 +1015,11 @@ function renderRevenue() {
 }
 
 // === STUDENTS ===
+function setSourceFilter(f) {
+  sourceFilter = f;
+  document.querySelectorAll('[data-srcfilter]').forEach(c => c.classList.toggle('active', c.dataset.srcfilter === f));
+  renderCalendarPage();
+}
 function setStudentFilter(f) {
   studentFilter = f;
   document.querySelectorAll('.filter-chip').forEach(c => c.classList.toggle('active', c.dataset.filter === f));
@@ -1045,7 +1058,9 @@ function openBookingActions(key) {
   actionsKey = key;
   document.getElementById('actionsTitle').textContent = `${r.data.first_name || ''} ${r.data.last_name || ''}`;
   document.getElementById('actionsSubtitle').textContent =
-    `${fmtDate(r.data.date)} at ${r.data.time_label || ''} · ${r.data.status || ''}${r.data.course_type === 'renewal' ? ' · RENEWAL' : ''}`;
+    `${fmtDate(r.data.date)} at ${r.data.time_label || ''} · ${r.data.status || ''}${r.data.course_type === 'renewal' ? ' · RENEWAL' : ''}${r.data.source ? ' · ' + r.data.source.toUpperCase() : ''}`;
+  const isAd = r.data.source === 'paid_ad';
+  document.getElementById('actionSourceBtn').textContent = isAd ? '🌱 Mark as Organic' : '💰 Mark as Paid Ad';
   document.getElementById('actionsModal').style.display = 'flex';
 }
 function closeActions() {
@@ -1057,6 +1072,24 @@ function actionReschedule() {
   closeActions();
   openReschedule(key);
 }
+async function actionToggleSource() {
+  const r = RECORDS.find(x => x.key === actionsKey);
+  if (!r) return;
+  const newSource = r.data.source === 'paid_ad' ? 'organic' : 'paid_ad';
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(r.key)}?teamId=${CONFIG.teamId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: newSource }),
+    });
+    if (!res.ok) throw new Error('PATCH failed: ' + res.status);
+    closeActions();
+    await loadAll();
+  } catch (e) {
+    alert('Failed: ' + e.message);
+  }
+}
+
 async function actionCancel() {
   const r = RECORDS.find(x => x.key === actionsKey);
   if (!r) return;
