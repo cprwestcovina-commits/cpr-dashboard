@@ -1639,21 +1639,23 @@ const PIPELINE_STAGES = [
       { id: 5130806, name: 'Pay-click 2-Hour Follow-up', what: '"Did your payment go through?" email for pending records 2–6 hours old. Marks nudge2_sent=yes to prevent duplicate sends.', schedule: 'hourly' },
       { id: 5118321, name: 'Abandoned Booking $30 Off Recovery', what: 'Final recovery push with COMEBACK30 code for pending records older than 5 days with future class dates.', schedule: 'daily 10 AM PT' },
       { id: 5118287, name: '24hr Class Reminder', what: '"Your class is tomorrow" reminder with location, parking, and what-to-bring info. Course-aware copy.', schedule: 'daily 9 AM PT' },
+      { id: 5131291, name: 'Post-Class Thank-You + Review Request', what: 'Day-after-class email: thanks, Google review CTA, 30BEATS family/friend code, course-aware cross-sell. Marks thankyou_sent=yes.', schedule: 'daily 10 AM PT' },
       { id: 5118322, name: 'Renewal Reminder', what: 'Multi-step nudge at 90/60/30/15/7/3/1 days before 2-year certification expiration. Includes RENEWAL25 promo.', schedule: 'daily 11 AM PT' },
       { id: 5127186, name: 'Reschedule Notification', what: 'Triggered on-demand from the dashboard\'s Reschedule button. Updates datastore, sends customer the new date, creates a new calendar invite.', schedule: 'on-demand (webhook 2335515)' },
     ],
   },
   {
     icon: '📋', name: 'Admin Daily Ops', sub: 'Roster + health monitoring',
-    what: 'Internal-only daily emails to keep the team informed: today\'s class roster, system health snapshot, error alerts.',
+    what: 'Internal-only daily emails to keep the team informed: today\'s class roster, system health snapshot, error alerts. Also runs the silent stale-pending cleanup.',
     scenarios: [
       { id: 5118320, name: 'Today\'s Class Roster', what: 'Emails admin the full roster for any classes confirmed for today, organized by time slot.', schedule: 'daily 7 AM PT' },
       { id: 5126033, name: 'Daily Health Check', what: 'System status report: scenario activity, queue counts, datastore record count, recent errors.', schedule: 'daily 8 AM PT' },
       { id: 5128031, name: 'Scenario Error Watchdog', what: 'Alerts admin via email if any scenario is offline, paused, or in DLQ error state.', schedule: 'daily 8 AM PT' },
+      { id: 5131292, name: 'Stale Pending Cleanup', what: 'Silent maintenance: flips pending records with passed class dates (>14d old) to status=expired so they stop showing up as active leads.', schedule: 'daily 11 AM PT' },
     ],
   },
 ];
-const PIPELINE_SCENARIOS = [5113311, 5124029, 5126180, 5118287, 5118320, 5118321, 5118322, 5126033, 5127186, 5128031, 5130806];
+const PIPELINE_SCENARIOS = [5113311, 5124029, 5126180, 5118287, 5118320, 5118321, 5118322, 5126033, 5127186, 5128031, 5130806, 5131291, 5131292];
 const PIPELINE_NAMES = {
   5113311: 'Integration Webhooks',
   5118287: '24hr Class Reminder',
@@ -1666,6 +1668,8 @@ const PIPELINE_NAMES = {
   5127186: 'Reschedule Notification',
   5128031: 'Scenario Error Watchdog',
   5130806: 'Pay-click 2-Hour Follow-up',
+  5131291: 'Post-Class Thank-You',
+  5131292: 'Stale Pending Cleanup',
 };
 var pipelinePollHandle = null;
 var pipelineLastSig = '';
