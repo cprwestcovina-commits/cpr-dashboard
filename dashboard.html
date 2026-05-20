@@ -1357,15 +1357,17 @@ async function pipelineRefresh() {
 }
 
 // === LOGS & DEBUG ===
-const SCENARIO_IDS = [5113311, 5118287, 5118320, 5118321, 5118322, 5124029, 5125415];
+const SCENARIO_IDS = [5113311, 5118287, 5118320, 5118321, 5118322, 5124029, 5126180, 5126033, 5127186];
 const SCENARIO_NAMES = {
-  5113311: 'Square Payment Confirmed',
+  5113311: 'Integration Webhooks',
   5118287: '24hr Reminder',
   5118320: "Today's Roster (Admin)",
   5118321: 'Abandoned Recovery',
   5118322: 'Renewal Reminders',
   5124029: 'BLS Pay-Click Alert',
-  5125415: 'Renewal Pay-Click Alert',
+  5126180: 'BLS Renewal - Pay Click',
+  5126033: 'Daily Health Check',
+  5127186: 'Reschedule Notification',
 };
 
 async function renderLogs() {
