@@ -249,7 +249,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .cal-booking.renewal { border-left-color: var(--blue); }
+  .cal-booking.renewal    { border-left-color: var(--blue); }
+  .cal-booking.heartsaver { border-left-color: #16a085; }   /* teal */
+  .cal-booking.acls       { border-left-color: #8e44ad; }   /* purple */
+  .cal-booking.pals       { border-left-color: #d35400; }   /* orange */
   .cal-booking.pending { opacity: 0.5; }
 
   /* Buttons */
@@ -351,6 +354,181 @@
     cursor: pointer;
     font-size: 14px;
   }
+
+  /* ===== Command bar (always visible) ===== */
+  .cmdbar {
+    background: linear-gradient(90deg, #1a1a1a 0%, #2a2a2a 100%);
+    color: #fff;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .cmdbar .cb-item { display: flex; align-items: center; gap: 6px; }
+  .cmdbar .cb-label { color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+  .cmdbar .cb-val { font-weight: 600; color: #fff; }
+  .cmdbar .cb-val.warn { color: #f5b041; }
+  .cmdbar .cb-val.alert { color: #ff7062; }
+  .cmdbar .cb-search {
+    flex: 1;
+    min-width: 200px;
+    background: #3a3a3a;
+    border: 1px solid #555;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .cmdbar .cb-search::placeholder { color: #888; }
+  .cmdbar .cb-search:focus { outline: none; border-color: var(--red); background: #444; }
+
+  /* Search results overlay */
+  .search-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 60px;
+  }
+  .search-overlay.open { display: flex; }
+  .search-results {
+    background: #fff;
+    border-radius: 12px;
+    width: min(720px, 92%);
+    max-height: 75vh;
+    overflow: auto;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+  }
+  .search-results-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; background: #fff;
+  }
+  .search-results-list { padding: 8px 0; }
+  .search-hit {
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--gray-100);
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+  .search-hit:hover { background: var(--gray-100); }
+  .search-hit .hit-name { font-weight: 600; }
+  .search-hit .hit-meta { font-size: 12px; color: var(--gray-500); }
+
+  /* Duplicate banner */
+  .dup-banner {
+    background: #FEF5E7;
+    border: 1px solid #f5b041;
+    color: #7a5c00;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin: 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+  }
+  .dup-banner.severe { background: #fce8e6; border-color: var(--red); color: var(--red-dark); }
+  .dup-banner button {
+    margin-left: auto;
+    background: transparent;
+    border: 1px solid currentColor;
+    color: inherit;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+  }
+
+  /* Health footer */
+  .health-footer {
+    background: #fafafa;
+    border-top: 1px solid var(--gray-200);
+    padding: 8px 20px;
+    font-size: 11px;
+    color: var(--gray-500);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+  }
+  .health-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .health-dot.warn { background: var(--orange); }
+  .health-dot.bad { background: var(--red); }
+
+  /* Edit student modal */
+  .edit-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .edit-row label { font-size: 12px; font-weight: 600; color: var(--gray-700); }
+  .edit-row input, .edit-row select { padding: 8px 10px; border: 1px solid var(--gray-300); border-radius: 6px; font-family: inherit; font-size: 14px; }
+
+  /* Capacity heatmap overlay on calendar cells */
+  .cal-cell { position: relative; }
+  .cal-capbar {
+    display: flex;
+    gap: 2px;
+    margin-top: 4px;
+  }
+  .cal-capbar .seg {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--gray-200);
+  }
+  .cal-capbar .seg.low { background: var(--green); }
+  .cal-capbar .seg.med { background: var(--orange); }
+  .cal-capbar .seg.high { background: var(--red); }
+  .cal-capbar-label {
+    font-size: 9px;
+    color: var(--gray-500);
+    margin-top: 2px;
+  }
+
+  /* Mobile responsive */
+  @media (max-width: 768px) {
+    .wrap { padding: 0 12px 80px; }
+    .topbar h1 { font-size: 18px; }
+    .tabbar { padding: 6px 8px 0; gap: 1px; }
+    .tab { padding: 8px 10px; font-size: 12px; }
+    .tab .badge { font-size: 9px; padding: 1px 4px; }
+    .stats-row { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    .stat { padding: 12px !important; }
+    .stat .val { font-size: 22px !important; }
+    .stat .label { font-size: 11px !important; }
+    .stat .sub { font-size: 10px !important; }
+    .page { padding: 12px !important; }
+    table { font-size: 12px; }
+    th, td { padding: 6px 4px !important; }
+    .panel { padding: 12px !important; }
+    .cmdbar { padding: 8px 12px; gap: 10px; font-size: 12px; }
+    .cmdbar .cb-search { min-width: 100%; order: 99; }
+    .calendar { grid-template-columns: repeat(7, 1fr) !important; font-size: 10px; }
+    .cal-cell { min-height: 60px !important; padding: 4px !important; }
+    .cal-num { font-size: 11px !important; }
+    .cal-booking { font-size: 9px !important; padding: 1px 3px !important; }
+    .health-footer { font-size: 10px; gap: 8px; padding: 6px 12px 60px; }
+    /* Hide some columns on narrow tables */
+    table .mobile-hide { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -365,6 +543,17 @@
 </div>
 
 <div id="dashboardView" style="display:none;">
+
+  <!-- Command Bar (always visible) -->
+  <div class="cmdbar" id="cmdbar">
+    <div class="cb-item"><span class="cb-label">Next class</span><span class="cb-val" id="cbNextClass">—</span></div>
+    <div class="cb-item"><span class="cb-label">Today</span><span class="cb-val" id="cbToday">—</span></div>
+    <div class="cb-item"><span class="cb-label">Pending</span><span class="cb-val" id="cbPending">—</span></div>
+    <input type="text" class="cb-search" id="cbSearch" placeholder="🔎 Search students by name, email, phone…" oninput="runSearch(this.value)" onfocus="if(this.value)runSearch(this.value)">
+  </div>
+
+  <!-- Banners slot (duplicate detector, etc.) -->
+  <div id="bannerSlot" style="padding: 0 20px;"></div>
 
   <!-- Browser-style tabs -->
   <div class="tabbar">
@@ -433,9 +622,12 @@
           <div class="filter-chip" data-srcfilter="organic" onclick="setSourceFilter('organic')">🌱 Organic</div>
         </div>
         <div id="calendar"></div>
-        <div style="margin-top:14px; display:flex; gap:14px; font-size:12px; color: var(--gray-700);">
+        <div style="margin-top:14px; display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color: var(--gray-700);">
           <span><span style="display:inline-block;width:10px;height:10px;background:var(--red);border-radius:2px;vertical-align:middle;margin-right:4px;"></span>BLS</span>
-          <span><span style="display:inline-block;width:10px;height:10px;background:var(--blue);border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Renewal</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:var(--blue);border-radius:2px;vertical-align:middle;margin-right:4px;"></span>BLS Renewal</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#16a085;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Heartsaver</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#8e44ad;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>ACLS</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#d35400;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>PALS</span>
           <span><span style="display:inline-block;width:10px;height:10px;background:var(--gray-300);border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Pending</span>
         </div>
       </div>
@@ -543,6 +735,14 @@
     </div>
 
   </div>
+
+  <!-- Health Footer -->
+  <div class="health-footer" id="healthFooter">
+    <span><span class="health-dot" id="hf-square"></span>Square webhook <span id="hf-square-txt">checking…</span></span>
+    <span><span class="health-dot" id="hf-scen"></span>Scenarios <span id="hf-scen-txt">checking…</span></span>
+    <span><span class="health-dot" id="hf-data"></span>Data sync <span id="hf-data-txt">—</span></span>
+    <span><span class="health-dot warn" id="hf-token"></span>API token <span id="hf-token-txt">—</span></span>
+  </div>
 </div>
 
 <!-- Booking Actions Modal -->
@@ -555,6 +755,57 @@
       <button class="btn" id="actionSourceBtn" onclick="actionToggleSource()"></button>
       <button class="btn" onclick="actionCancel()" style="background:var(--red);color:#fff;">✖ Cancel Booking</button>
       <button class="btn" onclick="closeActions()" style="background:var(--gray-100);color:var(--gray-900);">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Search Overlay -->
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-results">
+    <div class="search-results-header">
+      <strong id="searchHitCount">No results</strong>
+      <button onclick="closeSearch()" style="background:transparent;border:none;font-size:20px;cursor:pointer;color:var(--gray-500);">✕</button>
+    </div>
+    <div class="search-results-list" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- Edit Student Modal -->
+<div id="editModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;max-width:480px;width:92%;box-shadow:0 20px 50px rgba(0,0,0,0.3);max-height:90vh;overflow:auto;">
+    <h3 style="margin-bottom:16px;">Edit Booking</h3>
+    <div id="editError" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none;"></div>
+    <div class="edit-row"><label>First name</label><input type="text" id="editFirstName"></div>
+    <div class="edit-row"><label>Last name</label><input type="text" id="editLastName"></div>
+    <div class="edit-row"><label>Email</label><input type="email" id="editEmail"></div>
+    <div class="edit-row"><label>Phone</label><input type="tel" id="editPhone"></div>
+    <div class="edit-row"><label>Date</label><input type="date" id="editDate"></div>
+    <div class="edit-row"><label>Time</label>
+      <select id="editTime">
+        <option value="am">10:00 AM – 12:00 PM</option>
+        <option value="pm">6:00 PM – 8:00 PM</option>
+        <option value="noon">12:00 PM – 4:00 PM (ACLS/PALS)</option>
+      </select>
+    </div>
+    <div class="edit-row"><label>Course</label>
+      <select id="editCourse">
+        <option value="bls">BLS</option>
+        <option value="bls_renewal">BLS Renewal</option>
+        <option value="heartsaver">Heartsaver</option>
+        <option value="acls">ACLS</option>
+        <option value="pals">PALS</option>
+      </select>
+    </div>
+    <div class="edit-row"><label>Status</label>
+      <select id="editStatus">
+        <option value="confirmed">Confirmed</option>
+        <option value="pending">Pending</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn" onclick="closeEdit()" style="background:var(--gray-100);color:var(--gray-900);">Cancel</button>
+      <button class="btn" id="editSaveBtn" onclick="saveEdit()">Save</button>
     </div>
   </div>
 </div>
@@ -712,10 +963,20 @@ async function apiGet(path) {
 async function loadAll() {
   document.getElementById('lastUpdated').textContent = 'Loading…';
   try {
-    const d = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data?teamId=${CONFIG.teamId}&limit=500`);
-    RECORDS = d.records.filter(r => r.data && r.data.email && r.data.status !== 'anchor');
+    // Make API caps pg[limit] at 100. Paginate if we ever exceed that.
+    let all = [];
+    let offset = 0;
+    while (true) {
+      const d = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data?teamId=${CONFIG.teamId}&pg%5Blimit%5D=100&pg%5Boffset%5D=${offset}`);
+      const batch = d.records || [];
+      all = all.concat(batch);
+      if (batch.length < 100) break;        // last page
+      offset += 100;
+      if (offset >= 1000) break;            // safety stop at 1000 records
+    }
+    RECORDS = all.filter(r => r.data && r.data.email && r.data.status !== 'anchor');
     render();
-    document.getElementById('lastUpdated').textContent = 'Last updated ' + new Date().toLocaleTimeString();
+    document.getElementById('lastUpdated').textContent = 'Last updated ' + new Date().toLocaleTimeString() + ' (' + RECORDS.length + ' records)';
   } catch (e) {
     document.getElementById('lastUpdated').textContent = 'Error: ' + e.message;
   }
@@ -894,7 +1155,13 @@ function renderCalendarPage() {
       <div class="cal-num">${d}</div>
       <div class="cal-bookings">
         ${dayBookings.slice(0,5).map(r => {
-          const cls = (r.data.course_type === 'renewal' ? 'renewal' : '') + (r.data.status !== 'confirmed' ? ' pending' : '');
+          const ct = (r.data.course_type || '').replace(/^aha_/, '');
+          const courseCls = (ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') ? 'renewal'
+                         : (ct === 'heartsaver' || ct === 'hs') ? 'heartsaver'
+                         : (ct === 'acls') ? 'acls'
+                         : (ct === 'pals') ? 'pals'
+                         : '';
+          const cls = courseCls + (r.data.status !== 'confirmed' ? ' pending' : '');
           const adBadge = r.data.source === 'paid_ad' ? ' <span style="background:#FCEAE8;color:var(--red);padding:0 4px;border-radius:3px;font-size:9px;font-weight:700;">AD</span>' : '';
           return `<div class="cal-booking ${cls}" style="cursor:pointer;" onclick="openBookingActions('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name)} ${escapeHtml(r.data.last_name)} · ${escapeHtml(r.data.time_label)} · ${escapeHtml(r.data.status)}${r.data.source ? ' · ' + escapeHtml(r.data.source) : ''} — click for actions">${escapeHtml(r.data.time_label || '?')} ${escapeHtml(r.data.first_name || '')}${adBadge}</div>`;
         }).join('')}
@@ -1172,85 +1439,77 @@ async function doReschedule() {
 }
 
 // === PIPELINE ===
+// Each stage lists EVERY Make scenario that touches it.
+// `scenarios` = array of {id, name, what, schedule} for full transparency.
 const PIPELINE_STAGES = [
   {
-    icon: '📝', name: 'Booking Form', sub: 'Widget submit', scenario: null,
-    what: 'Student fills out the booking widget (bls-booking.html or bls-renewal.html). On "Pay Now" click, JS fires two parallel requests.',
-    fires: [
-      'POST to Integration Webhooks (hook 2328890) — full booking payload',
-      'PATCH to Data Store directly — writes pending record (so it appears on dashboard immediately, before payment)',
+    icon: '📝', name: 'Booking Form', sub: 'Widget submit',
+    what: 'Student fills out a booking widget and clicks Pay. The widget fires a webhook to Make AND PATCHes the data store directly (so the record appears on the dashboard before Square payment completes).',
+    scenarios: [],  // No Make scenarios at this stage — pure frontend
+    automations: [
+      { name: 'Homepage widget (MainBody.jsx)', what: 'All 5 courses; tagged source=organic. Lives in Hostinger Horizons.' },
+      { name: 'BLS landing widget (bls-booking.html)', what: 'Paid-ad funnel; tagged source=paid_ad. Lives on GitHub Pages.' },
+      { name: 'Renewal landing widget (bls-renewal.html)', what: 'Paid-ad renewal funnel; tagged source=paid_ad.' },
     ],
-    fields: ['booking_id', 'first_name', 'last_name', 'email', 'phone', 'date', 'date_formatted', 'time_label', 'time_end', 'course_type', 'total', 'submitted_at'],
-    files: ['bls-booking.html (line 794)', 'bls-renewal.html'],
+    fields: ['booking_id', 'first_name', 'last_name', 'email', 'phone', 'date', 'date_formatted', 'time_label', 'time_end', 'course_type', 'total', 'source', 'submitted_at'],
   },
   {
-    icon: '🔔', name: 'Webhook', sub: 'Integration Webhooks', scenario: 5113311,
-    what: 'Catches both booking-form submissions AND Square payment confirmations. Routes payload through Data Store search → email → calendar → admin notification.',
-    fires: [
-      'Webhook trigger (gateway:CustomWebHook) — hook 2328890',
-      'Data Store search by booking_id (datastore:SearchRecord)',
-      'Gmail send customer confirmation (google-email:sendAnEmail → customer)',
-      'Google Calendar create event (google-calendar:createAnEvent → customer)',
-      'Gmail send admin notification (google-email:sendAnEmail → cprwestcovina@gmail.com)',
-      'HTTP request (http:ActionSendData)',
+    icon: '🔔', name: 'Pay-click Webhook', sub: 'Admin alert + customer nudge',
+    what: 'Fires the instant a student clicks Pay on the widget (before Square checkout completes). Sends an immediate admin alert, a customer nudge email, and writes a pending record to the data store.',
+    scenarios: [
+      { id: 5124029, name: 'Pay-click Alert (all courses)', what: 'Hook 2328721. Customer nudge email + admin alert + datastore write. Course-agnostic — handles BLS/Renewal/Heartsaver/ACLS/PALS via switch on booking_id prefix.', schedule: 'instant (webhook)' },
+      { id: 5126180, name: 'Renewal Pay-click (legacy widget)', what: 'Hook 2334736. Same purpose, but specific to the legacy bls-renewal.html landing page.', schedule: 'instant (webhook)' },
     ],
-    files: ['Make scenario 5113311'],
   },
   {
-    icon: '💳', name: 'Payment', sub: 'Square checkout', scenario: 5124029,
-    what: 'Square hosted checkout receives payment. On success Square sends a webhook to Make. Pay-Click Alert scenario notifies admin when student CLICKS pay (separate from payment completion).',
-    fires: [
-      'Customer redirected to Square hosted page',
-      'Square processes card / Apple Pay / Cash App',
-      'Square webhook fires payment.created + payment.updated events',
-      'BLS Pay-Click Alert (5124029) sends admin "someone clicked pay" Slack/email',
+    icon: '💳', name: 'Square Payment', sub: 'Hosted checkout',
+    what: 'Customer is redirected to Square Payment Link. Square processes card / Apple Pay / Cash App, then fires payment.created and payment.updated webhooks back to Make.',
+    scenarios: [],  // External
+    automations: [
+      { name: 'Square Payment Link (per course)', what: 'BLS/Renewal $89, Heartsaver $98, ACLS/PALS $250. Account-level webhook subscription covers all links.' },
     ],
-    files: ['Make scenarios 5124029 (BLS) + 5126180 (Renewal)'],
   },
   {
-    icon: '🗄', name: 'Data Store', sub: 'Record written', scenario: null,
-    what: 'Single source of truth for all bookings. Lives in Make data store 100809. Dashboard reads from here. Status field tracks pending → confirmed flow.',
-    fires: [
-      'PATCH from widget on Pay-click (status: pending)',
-      'Update by Integration Webhooks scenario on Square confirmation (status: confirmed)',
-      'PATCH from dashboard Reschedule button (date/time updates + audit fields)',
+    icon: '✅', name: 'Confirmation', sub: 'Payment complete → fulfillment',
+    what: 'Square fires payment.updated COMPLETED → Integration Webhooks scenario verifies, finds the matching pending record, sends the customer their confirmation + calendar invite, alerts admin, and flips datastore status to confirmed.',
+    scenarios: [
+      { id: 5113311, name: 'Integration Webhooks', what: 'Hook 2328890. Filtered to payment.updated AND status=COMPLETED (kills Square\'s ×2 duplicates). SearchRecord limit 1 sorted by submitted_at desc + status=pending (prevents repeat-customer spam). Sends customer confirmation email, creates Google Calendar event with student as attendee, sends admin paid-booking alert, flips datastore status to confirmed.', schedule: 'instant (webhook)' },
     ],
-    fields: ['Stored: email, name, phone, date, time_label, time_end, status, course_type, booking_id, submitted_at, rescheduled_at, previous_date, previous_time, square_payment_id'],
-    files: ['Make Data Store 100809 (BLS Bookings)'],
   },
   {
-    icon: '✉️', name: 'Customer Email', sub: 'Confirmation + invite', scenario: 5113311,
-    what: 'Customer receives "You\'re confirmed!" Gmail with class details + a Google Calendar invite for the class time. Sent from cprwestcovina@gmail.com.',
-    fires: [
-      'Gmail HTML email — subject "You\'re confirmed! BLS Certification on <date>"',
-      'Google Calendar event — title "BLS Class — <name>", attendee = customer email, location = 100 Barranca St',
-      'Calendar reminders: email 24hr before + popup 60min before',
+    icon: '✉️', name: 'Customer Lifecycle', sub: 'Follow-ups, reminders, recovery',
+    what: 'Every customer-facing email after the initial pay-click — recovery nudges if they didn\'t pay, reminders before class, renewal nudges 2 years later, on-demand reschedule notifications.',
+    scenarios: [
+      { id: 5130806, name: 'Pay-click 2-Hour Follow-up', what: '"Did your payment go through?" email for pending records 2–6 hours old. Marks nudge2_sent=yes to prevent duplicate sends.', schedule: 'hourly' },
+      { id: 5118321, name: 'Abandoned Booking $30 Off Recovery', what: 'Final recovery push with COMEBACK30 code for pending records older than 5 days with future class dates.', schedule: 'daily 10 AM PT' },
+      { id: 5118287, name: '24hr Class Reminder', what: '"Your class is tomorrow" reminder with location, parking, and what-to-bring info. Course-aware copy.', schedule: 'daily 9 AM PT' },
+      { id: 5118322, name: 'Renewal Reminder', what: 'Multi-step nudge at 90/60/30/15/7/3/1 days before 2-year certification expiration. Includes RENEWAL25 promo.', schedule: 'daily 11 AM PT' },
+      { id: 5127186, name: 'Reschedule Notification', what: 'Triggered on-demand from the dashboard\'s Reschedule button. Updates datastore, sends customer the new date, creates a new calendar invite.', schedule: 'on-demand (webhook 2335515)' },
     ],
-    files: ['Modules 5 + 6 in scenario 5113311'],
   },
   {
-    icon: '🔄', name: 'Reschedule', sub: 'On-demand', scenario: 5127186,
-    what: 'Admin clicks Reschedule on Students tab → dashboard PATCHes Data Store with new date/time + posts to Reschedule Notification webhook → scenario sends customer a "rescheduled" email and a NEW calendar invite.',
-    fires: [
-      'Dashboard PATCH to Data Store (new date/time, audit fields)',
-      'POST to webhook 2335515',
-      'Data Store re-search by booking_id',
-      'Gmail "Your class has been rescheduled" email',
-      'Google Calendar event for the new time',
+    icon: '📋', name: 'Admin Daily Ops', sub: 'Roster + health monitoring',
+    what: 'Internal-only daily emails to keep the team informed: today\'s class roster, system health snapshot, error alerts.',
+    scenarios: [
+      { id: 5118320, name: 'Today\'s Class Roster', what: 'Emails admin the full roster for any classes confirmed for today, organized by time slot.', schedule: 'daily 7 AM PT' },
+      { id: 5126033, name: 'Daily Health Check', what: 'System status report: scenario activity, queue counts, datastore record count, recent errors.', schedule: 'daily 8 AM PT' },
+      { id: 5128031, name: 'Scenario Error Watchdog', what: 'Alerts admin via email if any scenario is offline, paused, or in DLQ error state.', schedule: 'daily 8 AM PT' },
     ],
-    files: ['Make scenario 5127186 + hook 2335515', 'Dashboard openReschedule() / doReschedule()'],
   },
 ];
-const PIPELINE_SCENARIOS = [5113311, 5124029, 5126180, 5118287, 5118320, 5118321, 5118322, 5127186];
+const PIPELINE_SCENARIOS = [5113311, 5124029, 5126180, 5118287, 5118320, 5118321, 5118322, 5126033, 5127186, 5128031, 5130806];
 const PIPELINE_NAMES = {
   5113311: 'Integration Webhooks',
-  5124029: 'BLS Pay-Click Alert',
-  5126180: 'Renewal Pay-Click',
-  5118287: '24hr Reminder',
-  5118320: "Today's Roster",
-  5118321: 'Abandoned Recovery',
-  5118322: 'Renewal Reminders',
+  5118287: '24hr Class Reminder',
+  5118320: "Today's Class Roster",
+  5118321: 'Abandoned Booking Recovery',
+  5118322: 'Renewal Reminder',
+  5124029: 'Pay-click Alert',
+  5126033: 'Daily Health Check',
+  5126180: 'Renewal Pay-click (legacy)',
   5127186: 'Reschedule Notification',
+  5128031: 'Scenario Error Watchdog',
+  5130806: 'Pay-click 2-Hour Follow-up',
 };
 var pipelinePollHandle = null;
 var pipelineLastSig = '';
@@ -1258,13 +1517,17 @@ var pipelineLastSig = '';
 var pipelineExpanded = null;
 function renderPipelineStages(counts) {
   document.getElementById('pipelineStages').innerHTML = PIPELINE_STAGES.map((s, i) => {
-    const n = s.scenario && counts[s.scenario] ? counts[s.scenario] : 0;
+    // Sum executions across every scenario in this stage
+    const scenarioIds = (s.scenarios || []).map(x => x.id);
+    const n = scenarioIds.reduce((acc, id) => acc + (counts[id] || 0), 0);
+    const automationCount = (s.scenarios || []).length + (s.automations || []).length;
     const active = pipelineExpanded === i;
-    return `<div onclick="togglePipelineStage(${i})" style="background:${active ? '#fff' : 'var(--gray-100)'};border:2px solid ${active ? 'var(--red)' : 'transparent'};border-radius:8px;padding:12px;text-align:center;position:relative;cursor:pointer;transition:all 0.15s;">
+    return `<div onclick="togglePipelineStage(${i})" style="background:${active ? '#fff' : 'var(--gray-100)'};border:2px solid ${active ? 'var(--red)' : 'transparent'};border-radius:8px;padding:12px;text-align:center;position:relative;cursor:pointer;transition:all 0.15s;min-height:120px;">
       <div style="font-size:24px;">${s.icon}</div>
       <div style="font-weight:600;font-size:13px;margin-top:4px;">${s.name}</div>
       <div style="color:var(--gray-700);font-size:11px;">${s.sub}</div>
-      ${n ? `<div style="margin-top:6px;font-size:11px;color:var(--green);font-weight:700;">${n} today</div>` : ''}
+      <div style="margin-top:6px;font-size:10px;color:var(--gray-500);">${automationCount} automation${automationCount === 1 ? '' : 's'}</div>
+      ${n ? `<div style="margin-top:2px;font-size:11px;color:var(--green);font-weight:700;">${n} run${n === 1 ? '' : 's'} today</div>` : ''}
       ${i < PIPELINE_STAGES.length - 1 ? '<div style="position:absolute;right:-6px;top:50%;transform:translateY(-50%);color:var(--gray-500);z-index:1;">→</div>' : ''}
     </div>`;
   }).join('');
@@ -1280,20 +1543,76 @@ var pipelineLastCounts = {};
 function renderPipelineDetail() {
   const host = document.getElementById('pipelineDetail');
   if (!host) return;
-  if (pipelineExpanded === null) { host.innerHTML = '<div class="empty" style="padding:24px;">Click a stage above to see exactly what happens at that step.</div>'; return; }
+  if (pipelineExpanded === null) {
+    // Show full inventory by default — every automation in the system
+    const allRows = PIPELINE_STAGES.map(s => {
+      const items = [
+        ...(s.scenarios || []).map(sc => ({ ...sc, type: 'scenario' })),
+        ...(s.automations || []).map(a => ({ ...a, type: 'frontend' })),
+      ];
+      if (!items.length) return '';
+      return `<div style="margin-bottom:18px;">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;margin-bottom:6px;color:var(--gray-900);">
+          <span style="font-size:18px;">${s.icon}</span>${escapeHtml(s.name)}
+          <span style="font-size:11px;font-weight:500;color:var(--gray-500);">· ${items.length} automation${items.length === 1 ? '' : 's'}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr;gap:6px;margin-left:26px;">
+          ${items.map(it => `<div style="padding:8px 12px;background:var(--gray-100);border-radius:6px;border-left:3px solid ${it.type === 'scenario' ? 'var(--red)' : 'var(--blue)'};font-size:13px;">
+            <div style="font-weight:600;">${it.type === 'scenario' ? `<code style="font-size:11px;background:#fff;padding:1px 5px;border-radius:3px;color:var(--gray-700);margin-right:6px;">#${it.id}</code>` : '<code style="font-size:11px;background:#fff;padding:1px 5px;border-radius:3px;color:var(--blue);margin-right:6px;">FE</code>'}${escapeHtml(it.name)}${it.schedule ? `<span style="font-weight:400;font-size:11px;color:var(--gray-500);margin-left:6px;">[${escapeHtml(it.schedule)}]</span>` : ''}</div>
+            <div style="color:var(--gray-700);font-size:12px;margin-top:2px;">${escapeHtml(it.what)}</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).filter(Boolean).join('');
+    const sceTotal = PIPELINE_STAGES.reduce((n, s) => n + (s.scenarios || []).length, 0);
+    const feTotal = PIPELINE_STAGES.reduce((n, s) => n + (s.automations || []).length, 0);
+    host.innerHTML = `
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--blue-light);border-radius:8px;font-size:13px;color:var(--gray-700);">
+        <strong>📋 Full automation inventory</strong> — ${sceTotal} Make scenarios + ${feTotal} frontend automations.
+        Click any stage above for that stage's details only.
+      </div>
+      ${allRows}
+    `;
+    return;
+  }
   const s = PIPELINE_STAGES[pipelineExpanded];
+  const sceList = (s.scenarios || []);
+  const feList = (s.automations || []);
   host.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
       <div style="font-size:32px;">${s.icon}</div>
       <div>
         <div style="font-size:18px;font-weight:700;">${s.name}</div>
-        <div style="color:var(--gray-700);font-size:13px;">${s.sub}${s.scenario ? ' · scenario ' + s.scenario : ''}</div>
+        <div style="color:var(--gray-700);font-size:13px;">${escapeHtml(s.sub)}</div>
       </div>
     </div>
     <div style="margin-bottom:14px;line-height:1.5;">${escapeHtml(s.what)}</div>
-    ${s.fires ? `<div style="margin-bottom:14px;"><div style="font-weight:600;font-size:13px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-700);">What fires</div><ol style="margin-left:18px;line-height:1.7;font-size:14px;">${s.fires.map(f => '<li>' + escapeHtml(f) + '</li>').join('')}</ol></div>` : ''}
-    ${s.fields ? `<div style="margin-bottom:14px;"><div style="font-weight:600;font-size:13px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-700);">Fields / payload</div><div style="font-family:monospace;font-size:12px;background:var(--gray-100);padding:8px 12px;border-radius:6px;">${s.fields.map(escapeHtml).join(', ')}</div></div>` : ''}
-    ${s.files ? `<div><div style="font-weight:600;font-size:13px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-700);">Where it lives</div><ul style="margin-left:18px;line-height:1.7;font-size:14px;">${s.files.map(f => '<li>' + escapeHtml(f) + '</li>').join('')}</ul></div>` : ''}
+
+    ${sceList.length ? `<div style="margin-bottom:14px;">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-700);">Make scenarios (${sceList.length})</div>
+      <div style="display:grid;gap:8px;">
+        ${sceList.map(sc => `<div style="padding:10px 14px;background:#fff;border:1px solid var(--gray-200);border-radius:8px;border-left:4px solid var(--red);">
+          <div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <code style="font-size:12px;background:var(--gray-100);padding:2px 6px;border-radius:4px;color:var(--gray-700);">#${sc.id}</code>
+            <span>${escapeHtml(sc.name)}</span>
+            ${sc.schedule ? `<span style="font-weight:500;font-size:11px;color:var(--blue);background:var(--blue-light);padding:1px 6px;border-radius:3px;">${escapeHtml(sc.schedule)}</span>` : ''}
+          </div>
+          <div style="color:var(--gray-700);font-size:13px;margin-top:4px;line-height:1.5;">${escapeHtml(sc.what)}</div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    ${feList.length ? `<div style="margin-bottom:14px;">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-700);">Frontend / external (${feList.length})</div>
+      <div style="display:grid;gap:8px;">
+        ${feList.map(a => `<div style="padding:10px 14px;background:#fff;border:1px solid var(--gray-200);border-radius:8px;border-left:4px solid var(--blue);">
+          <div style="font-weight:700;font-size:14px;">${escapeHtml(a.name)}</div>
+          <div style="color:var(--gray-700);font-size:13px;margin-top:4px;line-height:1.5;">${escapeHtml(a.what)}</div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    ${s.fields ? `<div style="margin-bottom:14px;"><div style="font-weight:600;font-size:13px;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-700);">Fields written / payload</div><div style="font-family:monospace;font-size:12px;background:var(--gray-100);padding:8px 12px;border-radius:6px;">${s.fields.map(escapeHtml).join(', ')}</div></div>` : ''}
   `;
 }
 
@@ -1553,6 +1872,444 @@ function renderRenewalsPage() {
       }).join('') + `</tbody></table>`
     : '<div class="empty">No confirmed students yet.</div>';
 }
+
+// ====================================================================
+// NEW FEATURES — command bar, search, dup detector, edit, health, etc.
+// ====================================================================
+
+// --- Course label helper for new code (handles all aliases) ---
+function courseLabelFull(t) {
+  const map = {
+    bls:'BLS', aha_bls:'BLS',
+    bls_renewal:'BLS Renewal', aha_bls_renewal:'BLS Renewal', rnw:'BLS Renewal', renewal:'BLS Renewal',
+    heartsaver:'Heartsaver', aha_heartsaver:'Heartsaver', hs:'Heartsaver',
+    acls:'ACLS', aha_acls:'ACLS',
+    pals:'PALS', aha_pals:'PALS'
+  };
+  return map[t] || (t || 'Course');
+}
+
+// --- Time-until helper ---
+function timeUntil(dateStr, timeLabel) {
+  if (!dateStr || !timeLabel) return null;
+  const m = timeLabel.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return null;
+  let h = parseInt(m[1]); const min = parseInt(m[2]);
+  const p = m[3].toUpperCase();
+  if (p === 'PM' && h !== 12) h += 12;
+  if (p === 'AM' && h === 12) h = 0;
+  const dt = new Date(dateStr + 'T00:00:00');
+  dt.setHours(h, min, 0, 0);
+  const diff = dt.getTime() - Date.now();
+  return diff;
+}
+function fmtCountdown(ms) {
+  if (ms == null) return '—';
+  if (ms < 0) {
+    const m = Math.abs(Math.round(ms / 60000));
+    if (m < 60) return `started ${m}m ago`;
+    if (m < 1440) return `started ${Math.round(m/60)}h ago`;
+    return 'past';
+  }
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `in ${m}m`;
+  if (m < 1440) return `in ${Math.floor(m/60)}h ${m%60}m`;
+  return `in ${Math.round(m/1440)}d`;
+}
+
+// --- #1 Command bar ---
+function renderCommandBar() {
+  if (!RECORDS || !RECORDS.length) {
+    document.getElementById('cbNextClass').textContent = '—';
+    document.getElementById('cbToday').textContent = '0';
+    document.getElementById('cbPending').textContent = '0';
+    return;
+  }
+  const t = today();
+  const todayConfirmed = RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date === t);
+  const pending = RECORDS.filter(r => r.data.status === 'pending').length;
+
+  // Find next upcoming confirmed class (today or future)
+  const upcoming = RECORDS
+    .filter(r => r.data.status === 'confirmed' && r.data.date && r.data.date >= t)
+    .map(r => ({ r, ms: timeUntil(r.data.date, r.data.time_label) }))
+    .filter(x => x.ms != null && x.ms > -2*3600*1000) // include classes that started up to 2h ago
+    .sort((a,b) => a.ms - b.ms);
+
+  let nextTxt = 'none scheduled';
+  let nextCls = '';
+  if (upcoming.length) {
+    const u = upcoming[0];
+    const courseLbl = courseLabelFull(u.r.data.course_type);
+    nextTxt = `${courseLbl} · ${u.r.data.time_label} · ${fmtCountdown(u.ms)}`;
+    if (u.ms < 30*60*1000 && u.ms > 0) nextCls = 'warn';
+    if (u.ms < 0) nextCls = 'alert';
+  }
+  const cbNext = document.getElementById('cbNextClass');
+  cbNext.textContent = nextTxt;
+  cbNext.className = 'cb-val ' + nextCls;
+
+  document.getElementById('cbToday').textContent = todayConfirmed.length + ' confirmed';
+  const cbP = document.getElementById('cbPending');
+  cbP.textContent = pending + ' unpaid';
+  cbP.className = 'cb-val ' + (pending >= 5 ? 'warn' : '');
+}
+
+// --- #9 Universal search ---
+function runSearch(q) {
+  q = (q || '').trim().toLowerCase();
+  const overlay = document.getElementById('searchOverlay');
+  if (q.length < 2) { overlay.classList.remove('open'); return; }
+  const digits = q.replace(/\D/g, '');
+  const hits = RECORDS.filter(r => {
+    const d = r.data;
+    const blob = (
+      (d.first_name||'') + ' ' + (d.last_name||'') + ' ' +
+      (d.email||'') + ' ' + (d.phone||'') + ' ' +
+      (d.booking_id||'')
+    ).toLowerCase();
+    if (blob.includes(q)) return true;
+    if (digits.length >= 4 && (d.phone||'').replace(/\D/g,'').includes(digits)) return true;
+    return false;
+  }).slice(0, 50);
+
+  document.getElementById('searchHitCount').textContent = hits.length
+    ? `${hits.length} result${hits.length > 1 ? 's' : ''} for "${q}"`
+    : `No results for "${q}"`;
+  document.getElementById('searchResults').innerHTML = hits.length ? hits.map(r => {
+    const d = r.data;
+    const status = (d.status || '').toUpperCase();
+    const statusColor = d.status === 'confirmed' ? 'var(--green)' : (d.status === 'pending' ? 'var(--orange)' : 'var(--gray-500)');
+    return `<div class="search-hit" onclick="openEdit('${escapeHtml(r.key)}');closeSearch()">
+      <div>
+        <div class="hit-name">${escapeHtml(d.first_name||'')} ${escapeHtml(d.last_name||'')}</div>
+        <div class="hit-meta">${escapeHtml(d.email||'')} · ${escapeHtml(d.phone||'')} · ${escapeHtml(fmtDate(d.date))} ${escapeHtml(d.time_label||'')}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;font-weight:700;color:${statusColor};">${status}</div>
+        <div class="hit-meta">${courseLabelFull(d.course_type)}</div>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty" style="padding:20px;">No matches.</div>';
+  overlay.classList.add('open');
+}
+function closeSearch() {
+  document.getElementById('searchOverlay').classList.remove('open');
+}
+
+// --- #11 Duplicate detector ---
+function findDuplicates() {
+  // Group records by email+date; flag groups with 2+ submissions within 10 minutes
+  const groups = {};
+  RECORDS.forEach(r => {
+    const d = r.data;
+    if (!d.email || !d.date) return;
+    const key = d.email.toLowerCase() + '|' + d.date;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  });
+  const dups = [];
+  Object.values(groups).forEach(grp => {
+    if (grp.length < 2) return;
+    grp.sort((a,b) => (a.data.submitted_at||'').localeCompare(b.data.submitted_at||''));
+    // Flag if 2+ submitted within 10 minutes
+    let suspect = false;
+    for (let i = 1; i < grp.length; i++) {
+      const t1 = new Date(grp[i-1].data.submitted_at || 0).getTime();
+      const t2 = new Date(grp[i].data.submitted_at || 0).getTime();
+      if (Math.abs(t2 - t1) < 10*60*1000) { suspect = true; break; }
+    }
+    if (suspect) dups.push(grp);
+  });
+  return dups;
+}
+function renderDupBanner() {
+  const dups = findDuplicates();
+  const existing = document.getElementById('dupBanner');
+  if (existing) existing.remove();
+  if (!dups.length) return;
+  const total = dups.length;
+  const banner = document.createElement('div');
+  banner.id = 'dupBanner';
+  banner.className = 'dup-banner' + (total >= 3 ? ' severe' : '');
+  banner.innerHTML = `⚠️ <strong>${total} duplicate booking group${total>1?'s':''} detected.</strong>
+    Same email + date submitted within 10 minutes of each other.
+    <button onclick="showDups()">Review</button>`;
+  // Always inject into the fixed banner slot at the top
+  const slot = document.getElementById('bannerSlot');
+  if (slot) slot.appendChild(banner);
+}
+function showDups() {
+  const dups = findDuplicates();
+  const lines = dups.map(grp => {
+    const first = grp[0].data;
+    const allKeys = grp.map(r => r.key).join(', ');
+    return `<div class="search-hit">
+      <div>
+        <div class="hit-name">${escapeHtml(first.first_name||'')} ${escapeHtml(first.last_name||'')} · ${escapeHtml(first.email||'')}</div>
+        <div class="hit-meta">${grp.length} records on ${escapeHtml(fmtDate(first.date))} — Keys: <code>${escapeHtml(allKeys)}</code></div>
+        <div class="hit-meta" style="margin-top:4px;">
+          ${grp.map(r => `<button onclick="openEdit('${escapeHtml(r.key)}');closeSearch()" style="margin-right:6px;font-size:11px;padding:2px 8px;border:1px solid var(--gray-300);background:#fff;border-radius:4px;cursor:pointer;">${escapeHtml(r.key)}</button>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('searchHitCount').textContent = `${dups.length} duplicate group${dups.length>1?'s':''}`;
+  document.getElementById('searchResults').innerHTML = lines || '<div class="empty" style="padding:20px;">No duplicates.</div>';
+  document.getElementById('searchOverlay').classList.add('open');
+}
+
+// --- #13 Inline edit ---
+var editingKey = null;
+function openEdit(key) {
+  const r = RECORDS.find(x => x.key === key);
+  if (!r) return;
+  editingKey = key;
+  const d = r.data;
+  document.getElementById('editFirstName').value = d.first_name || '';
+  document.getElementById('editLastName').value = d.last_name || '';
+  document.getElementById('editEmail').value = d.email || '';
+  document.getElementById('editPhone').value = d.phone || '';
+  document.getElementById('editDate').value = d.date || '';
+  // Map time_label to dropdown value
+  const tl = d.time_label || '';
+  let timeVal = 'am';
+  if (tl.startsWith('6:00')) timeVal = 'pm';
+  else if (tl.startsWith('12:00')) timeVal = 'noon';
+  document.getElementById('editTime').value = timeVal;
+  // Normalize course_type
+  const ct = (d.course_type || '').replace(/^aha_/, '');
+  document.getElementById('editCourse').value = ['bls','bls_renewal','heartsaver','acls','pals'].includes(ct) ? ct : (ct === 'rnw' || ct === 'renewal' ? 'bls_renewal' : 'bls');
+  document.getElementById('editStatus').value = ['confirmed','pending','cancelled'].includes(d.status) ? d.status : 'pending';
+  document.getElementById('editError').style.display = 'none';
+  document.getElementById('editModal').style.display = 'flex';
+}
+function closeEdit() {
+  document.getElementById('editModal').style.display = 'none';
+  editingKey = null;
+}
+async function saveEdit() {
+  if (!editingKey) return;
+  const btn = document.getElementById('editSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const r = RECORDS.find(x => x.key === editingKey);
+  if (!r) { closeEdit(); return; }
+
+  const timeVal = document.getElementById('editTime').value;
+  const timeMap = {
+    am:   { label: '10:00 AM', end: '12:00 PM' },
+    pm:   { label: '6:00 PM',  end: '8:00 PM' },
+    noon: { label: '12:00 PM', end: '4:00 PM' },
+  };
+  const newDate = document.getElementById('editDate').value;
+  const dateFormatted = newDate ? new Date(newDate + 'T00:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }) : (r.data.date_formatted || '');
+
+  const newData = {
+    ...r.data,
+    first_name: document.getElementById('editFirstName').value.trim(),
+    last_name: document.getElementById('editLastName').value.trim(),
+    email: document.getElementById('editEmail').value.trim(),
+    phone: document.getElementById('editPhone').value.trim(),
+    date: newDate,
+    date_formatted: dateFormatted,
+    time_label: timeMap[timeVal].label,
+    time_end: timeMap[timeVal].end,
+    course_type: document.getElementById('editCourse').value,
+    status: document.getElementById('editStatus').value,
+  };
+
+  try {
+    const url = CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(editingKey)}?teamId=${CONFIG.teamId}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(newData),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    // Update in memory
+    r.data = newData;
+    closeEdit();
+    render();
+    renderCommandBar();
+    renderDupBanner();
+  } catch (e) {
+    const errEl = document.getElementById('editError');
+    errEl.textContent = 'Save failed: ' + e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+// --- #19 Health indicator ---
+async function checkHealth() {
+  // Data sync — based on last loadAll
+  const dataDot = document.getElementById('hf-data');
+  const dataTxt = document.getElementById('hf-data-txt');
+  const last = window.__lastSyncMs;
+  if (last) {
+    const ago = Math.round((Date.now() - last) / 1000);
+    dataTxt.textContent = ago < 60 ? `${ago}s ago` : `${Math.round(ago/60)}m ago`;
+    dataDot.className = 'health-dot' + (ago > 600 ? ' warn' : '');
+  } else {
+    dataTxt.textContent = 'never'; dataDot.className = 'health-dot bad';
+  }
+
+  // Token rotation reminder — flag if same token for > 90 days (we don't actually know creation date; use localStorage marker)
+  const tokenDot = document.getElementById('hf-token');
+  const tokenTxt = document.getElementById('hf-token-txt');
+  let firstSeen = localStorage.getItem('tokenFirstSeen');
+  if (!firstSeen) { firstSeen = Date.now().toString(); localStorage.setItem('tokenFirstSeen', firstSeen); }
+  const days = Math.round((Date.now() - parseInt(firstSeen)) / 86400000);
+  tokenTxt.textContent = `${days}d old`;
+  tokenDot.className = 'health-dot' + (days > 90 ? ' bad' : (days > 60 ? ' warn' : ''));
+
+  // Scenario health — pull scenario list and count active/inactive
+  try {
+    const d = await apiGet(`/scenarios?organizationId=7710362`);
+    const total = (d.scenarios || []).length;
+    const offline = (d.scenarios || []).filter(s => !s.isActive).length;
+    const errors = (d.scenarios || []).reduce((acc, s) => acc + (s.dlqCount || 0), 0);
+    const dot = document.getElementById('hf-scen');
+    const txt = document.getElementById('hf-scen-txt');
+    if (offline === 0 && errors === 0) {
+      txt.textContent = `${total} active`;
+      dot.className = 'health-dot';
+    } else if (offline > 0) {
+      txt.textContent = `${offline} offline of ${total}`;
+      dot.className = 'health-dot bad';
+    } else {
+      txt.textContent = `${errors} errors`;
+      dot.className = 'health-dot warn';
+    }
+  } catch (e) {
+    document.getElementById('hf-scen-txt').textContent = 'check failed';
+    document.getElementById('hf-scen').className = 'health-dot warn';
+  }
+
+  // Square webhook freshness — check last hook log for Square webhook (2328890)
+  try {
+    const d = await apiGet(`/hooks/2328890/logs?teamId=${CONFIG.teamId}&limit=1`);
+    const logs = d.hookLogs || [];
+    const dot = document.getElementById('hf-square');
+    const txt = document.getElementById('hf-square-txt');
+    if (!logs.length) { txt.textContent = 'never'; dot.className = 'health-dot warn'; return; }
+    const ts = logs[0].loggedAt ? new Date(logs[0].loggedAt).getTime() : 0;
+    const ago = Math.round((Date.now() - ts) / 1000);
+    if (ago < 3600) { txt.textContent = `${Math.round(ago/60)}m ago`; dot.className = 'health-dot'; }
+    else if (ago < 86400) { txt.textContent = `${Math.round(ago/3600)}h ago`; dot.className = 'health-dot'; }
+    else { txt.textContent = `${Math.round(ago/86400)}d ago`; dot.className = 'health-dot warn'; }
+  } catch (e) {
+    document.getElementById('hf-square-txt').textContent = 'check failed';
+    document.getElementById('hf-square').className = 'health-dot warn';
+  }
+}
+
+// --- #5 Capacity heatmap on calendar ---
+// Augment renderCalendarPage by post-processing the rendered cells
+function annotateCalendarCapacity() {
+  if (currentTab !== 'calendar') return;
+  const cap = CONFIG.seatCapacityPerSlot || 12;
+  // Walk records, group by date+time
+  const slotCounts = {};
+  RECORDS.filter(r => r.data.status === 'confirmed').forEach(r => {
+    const k = r.data.date + '|' + (r.data.time_label || '?');
+    slotCounts[k] = (slotCounts[k] || 0) + 1;
+  });
+  // Group totals per date
+  const dayTotals = {};
+  Object.entries(slotCounts).forEach(([k, n]) => {
+    const date = k.split('|')[0];
+    if (!dayTotals[date]) dayTotals[date] = { slots: [], total: 0 };
+    dayTotals[date].slots.push({ time: k.split('|')[1], count: n });
+    dayTotals[date].total += n;
+  });
+  // Inject a capacity bar into each cal-cell
+  document.querySelectorAll('.cal-cell').forEach(cell => {
+    if (cell.classList.contains('empty')) return;
+    if (cell.querySelector('.cal-capbar')) return; // already annotated
+    // Reverse engineer date from cell position is hard — instead match by booking text we already rendered
+    // Easier: re-parse cell content for time labels
+    const dayNumEl = cell.querySelector('.cal-num');
+    if (!dayNumEl) return;
+    const dayNum = parseInt(dayNumEl.textContent);
+    if (!dayNum) return;
+    const year = calendarMonth.getFullYear();
+    const mo = calendarMonth.getMonth();
+    const dateStr = `${year}-${String(mo+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+    const info = dayTotals[dateStr];
+    if (!info || !info.slots.length) return;
+    const bar = document.createElement('div');
+    bar.className = 'cal-capbar';
+    info.slots.forEach(s => {
+      const seg = document.createElement('div');
+      const pct = s.count / cap;
+      seg.className = 'seg ' + (pct >= 0.8 ? 'high' : pct >= 0.5 ? 'med' : 'low');
+      seg.title = `${s.time}: ${s.count}/${cap} seats`;
+      bar.appendChild(seg);
+    });
+    const lbl = document.createElement('div');
+    lbl.className = 'cal-capbar-label';
+    lbl.textContent = `${info.total} seat${info.total>1?'s':''} booked`;
+    cell.appendChild(bar);
+    cell.appendChild(lbl);
+  });
+}
+
+// --- Hook into existing render() and switchTab() ---
+const __origRender = render;
+render = function() {
+  __origRender();
+  renderCommandBar();
+  renderDupBanner();
+  if (currentTab === 'calendar') setTimeout(annotateCalendarCapacity, 50);
+};
+
+// --- Wrap calendar month nav to re-annotate ---
+const __origChangeMonth = changeMonth;
+changeMonth = function(delta) {
+  __origChangeMonth(delta);
+  setTimeout(annotateCalendarCapacity, 50);
+};
+
+// --- Track last sync time ---
+const __origLoadAll = loadAll;
+loadAll = async function() {
+  await __origLoadAll();
+  window.__lastSyncMs = Date.now();
+};
+
+// --- Auto-refresh: data every 60s, health every 60s ---
+setInterval(() => {
+  if (location.search.includes('mock=1')) return;
+  if (!IS_HOSTED && !MAKE_TOKEN) return;
+  if (IS_HOSTED && !DASHBOARD_PW) return;
+  if (currentTab !== 'pipeline') loadAll(); // pipeline has its own 5s poll
+}, 60000);
+
+setInterval(() => {
+  if (location.search.includes('mock=1')) return;
+  if (!IS_HOSTED && !MAKE_TOKEN) return;
+  if (IS_HOSTED && !DASHBOARD_PW) return;
+  checkHealth();
+}, 60000);
+
+// Initial health check after a delay so auth is ready
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    if (!IS_HOSTED && !MAKE_TOKEN) return;
+    if (IS_HOSTED && !DASHBOARD_PW) return;
+    if (!location.search.includes('mock=1')) checkHealth();
+  }, 2000);
+});
+
+// Escape key closes overlays
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closeSearch();
+    if (document.getElementById('editModal').style.display === 'flex') closeEdit();
+  }
+});
 </script>
 </body>
 </html>
