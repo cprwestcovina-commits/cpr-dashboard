@@ -643,6 +643,7 @@
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:16px;">
           Students who clicked Pay on the widget but haven't completed Square checkout yet. Reach out to close the sale.
         </p>
+        <div id="leadsRevenueRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:18px;"></div>
         <div id="leadsList"></div>
       </div>
     </div>
@@ -1047,15 +1048,17 @@ function updateBadges() {
 function renderDashboard() {
   const t = today();
   const monthStart = t.slice(0,7) + '-01';
-  const confirmedThisMonth = RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date >= monthStart && r.data.date <= t.slice(0,7) + '-31').length;
-  const pending = RECORDS.filter(r => r.data.status === 'pending').length;
+  const confirmedThisMonth = RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date >= monthStart && r.data.date <= t.slice(0,7) + '-31');
+  const confirmedRevenueThisMonth = confirmedThisMonth.reduce((s, r) => s + priceFor(r.data.course_type), 0);
+  const pending = RECORDS.filter(r => r.data.status === 'pending');
   const todayCount = RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date === t).length;
-  const revenue = confirmedThisMonth * CONFIG.pricePerBooking;
+  const pendingRevenue = pending.reduce((s, r) => s + priceFor(r.data.course_type), 0);
   const stats = [
     { label: 'Today', val: todayCount, sub: 'confirmed classes' },
-    { label: 'This Month', val: confirmedThisMonth, sub: 'paid bookings', cls: 'green' },
-    { label: 'Pending Leads', val: pending, sub: 'unpaid pay-clicks', cls: 'orange' },
-    { label: 'Revenue (est.)', val: '$' + revenue.toLocaleString(), sub: 'this month' },
+    { label: 'This Month', val: confirmedThisMonth.length, sub: 'paid bookings', cls: 'green' },
+    { label: 'Pending Leads', val: pending.length, sub: 'unpaid pay-clicks', cls: 'orange' },
+    { label: 'Revenue (est.)', val: '$' + confirmedRevenueThisMonth.toLocaleString(), sub: 'this month' },
+    { label: 'At Risk', val: '$' + pendingRevenue.toLocaleString(), sub: 'unrealized from leads', cls: 'red' },
   ];
   document.getElementById('statsRow').innerHTML = stats.map(s => `
     <div class="stat ${s.cls || ''}">
@@ -1182,11 +1185,55 @@ function renderCalendarPage() {
 }
 
 // === LEADS ===
+// Course pricing for revenue calculations
+const COURSE_PRICE = {
+  bls: 89, aha_bls: 89,
+  bls_renewal: 89, aha_bls_renewal: 89, rnw: 89, renewal: 89,
+  heartsaver: 98, aha_heartsaver: 98, hs: 98,
+  acls: 250, aha_acls: 250,
+  pals: 250, aha_pals: 250,
+};
+function priceFor(courseType) {
+  const ct = (courseType || '').toLowerCase();
+  return COURSE_PRICE[ct] || 89;
+}
+
 function renderLeads() {
   const rows = RECORDS
     .filter(r => r.data.status === 'pending')
     .sort((a,b) => (b.data.submitted_at || '').localeCompare(a.data.submitted_at || ''));
   document.getElementById('leadsCount').textContent = rows.length;
+
+  // Revenue at risk
+  const now = Date.now();
+  let recoverable = 0, atRisk = 0, lost = 0;
+  const breakdown = {};
+  rows.forEach(r => {
+    const price = priceFor(r.data.course_type);
+    const age = r.data.submitted_at ? (now - new Date(r.data.submitted_at).getTime()) / 86400000 : 999;
+    if (age < 2)        recoverable += price;
+    else if (age < 14)  atRisk += price;
+    else                lost += price;
+    const lbl = courseLabel(r.data.course_type).replace(/<[^>]+>/g, '');
+    breakdown[lbl] = (breakdown[lbl] || 0) + price;
+  });
+  const total = recoverable + atRisk + lost;
+  const stats = [
+    { label: 'Total at Stake', val: '$' + total.toLocaleString(), sub: rows.length + ' open leads', cls: '' },
+    { label: 'Hot (< 2 days)',  val: '$' + recoverable.toLocaleString(), sub: 'highest recovery odds', cls: 'green' },
+    { label: 'Warm (2-14 days)', val: '$' + atRisk.toLocaleString(),     sub: 'send recovery email',   cls: 'orange' },
+    { label: 'Cold (14d+)',      val: '$' + lost.toLocaleString(),       sub: 'mostly unrecoverable',  cls: 'red' },
+  ];
+  const breakdownStr = Object.entries(breakdown)
+    .sort((a,b) => b[1] - a[1])
+    .map(([k,v]) => `${k}: $${v.toLocaleString()}`)
+    .join(' · ');
+  document.getElementById('leadsRevenueRow').innerHTML = stats.map(s => `
+    <div class="stat ${s.cls}" style="padding:14px;">
+      <div class="label">${s.label}</div>
+      <div class="val" style="font-size:22px;">${s.val}</div>
+      <div class="sub">${s.sub}</div>
+    </div>`).join('') + (breakdownStr ? `<div style="grid-column:1/-1;font-size:12px;color:var(--gray-500);text-align:center;margin-top:-4px;">By course: ${breakdownStr}</div>` : '');
   document.getElementById('leadsList').innerHTML = rows.length
     ? `<table><thead><tr><th>Student</th><th>Email</th><th>Phone</th><th>Wanted Date</th><th>Submitted</th><th>Course</th><th></th></tr></thead><tbody>` +
       rows.map(r => {
@@ -1220,10 +1267,11 @@ function renderRevenue() {
   const totalLeads = RECORDS.length;
   const conversionRate = totalLeads ? Math.round(100 * ytdConfirmed.length / totalLeads) : 0;
 
+  const sumRev = list => list.reduce((s, r) => s + priceFor(r.data.course_type), 0);
   const stats = [
-    { label: 'This Month', val: '$' + (thisMonth.length * CONFIG.pricePerBooking).toLocaleString(), sub: thisMonth.length + ' bookings', cls: 'green' },
-    { label: 'Last Month', val: '$' + (lastMonth.length * CONFIG.pricePerBooking).toLocaleString(), sub: lastMonth.length + ' bookings' },
-    { label: 'YTD Revenue', val: '$' + (ytdConfirmed.length * CONFIG.pricePerBooking).toLocaleString(), sub: ytdConfirmed.length + ' bookings', cls: 'blue' },
+    { label: 'This Month', val: '$' + sumRev(thisMonth).toLocaleString(), sub: thisMonth.length + ' bookings', cls: 'green' },
+    { label: 'Last Month', val: '$' + sumRev(lastMonth).toLocaleString(), sub: lastMonth.length + ' bookings' },
+    { label: 'YTD Revenue', val: '$' + sumRev(ytdConfirmed).toLocaleString(), sub: ytdConfirmed.length + ' bookings', cls: 'blue' },
     { label: 'Conversion', val: conversionRate + '%', sub: 'paid / all leads', cls: 'orange' },
   ];
   document.getElementById('revenueStats').innerHTML = stats.map(s => `
