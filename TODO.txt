@@ -7,20 +7,18 @@ Last updated: 2026-05-21
 PHASE 2 — CARRYOVER (do next)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] #15  Thank-you email scenario (post-class, 24hr after class ends)
-         - Trigger: scheduled daily, finds yesterday's confirmed classes
-         - Sends "Thanks for training with us!" email with:
-           * Google review request link
-           * 30BEATS promo code ($30 off for friends/family)
-           * Cross-sell: BLS → ACLS/PALS, Heartsaver → BLS, etc.
-         - Course-aware copy (uses the standard switch formula)
+[x] #15  Thank-you email scenario → Scenario 5131291 "Post-Class Thank-You + Review Request"
+         - Schedule: daily 10 AM PT
+         - Filter: confirmed records with date = yesterday AND thankyou_sent != yes
+         - Sends Google review CTA + 30BEATS code + course-aware cross-sell
+         - Marks thankyou_sent=yes to prevent duplicate sends
+         - TODO: verify Google review link (currently https://g.page/r/CdoFw_Q9LRtcEAE/review)
 
-[ ] #18  Stale pending cleanup scenario
-         - Trigger: daily 11 AM PT
-         - Finds status=pending records >14 days old where class date has passed
-         - Action: PATCH status=expired (keeps for analytics, removes from
-           active leads)
-         - Optionally: send "Last chance" final email before flipping status
+[x] #18  Stale pending cleanup → Scenario 5131292 "Stale Pending Cleanup"
+         - Schedule: daily 11 AM PT
+         - Filter: pending records with class date >14 days in the past
+         - Action: PATCH status=expired (silent, no email)
+         - Keeps record for analytics, removes from active leads view
 
 [ ] #4   Manual pay-click recovery button on dashboard
          - On Leads tab, add a "🔔 Send recovery email now" button per row
