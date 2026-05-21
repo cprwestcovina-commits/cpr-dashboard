@@ -1165,7 +1165,13 @@ function renderCalendarPage() {
   for (let d=1;d<=daysInMonth;d++) {
     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = dateStr === t;
-    const dayBookings = RECORDS.filter(r => r.data.date === dateStr && (sourceFilter === 'all' || (r.data.source || 'paid_ad') === sourceFilter));
+    // Calendar shows ONLY confirmed bookings (paid or manually marked confirmed).
+    // Pending leads + cancelled + expired records stay off the calendar.
+    const dayBookings = RECORDS.filter(r =>
+      r.data.date === dateStr
+      && r.data.status === 'confirmed'
+      && (sourceFilter === 'all' || (r.data.source || 'paid_ad') === sourceFilter)
+    );
     html += `<div class="cal-cell ${isToday?'today':''}">
       <div class="cal-num">${d}</div>
       <div class="cal-bookings">
@@ -1176,7 +1182,7 @@ function renderCalendarPage() {
                          : (ct === 'acls') ? 'acls'
                          : (ct === 'pals') ? 'pals'
                          : '';
-          const cls = courseCls + (r.data.status !== 'confirmed' ? ' pending' : '');
+          const cls = courseCls;  // all calendar entries are confirmed by filter above
           const adBadge = r.data.source === 'paid_ad' ? ' <span style="background:#FCEAE8;color:var(--red);padding:0 4px;border-radius:3px;font-size:9px;font-weight:700;">AD</span>' : '';
           return `<div class="cal-booking ${cls}" style="cursor:pointer;" onclick="openBookingActions('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name)} ${escapeHtml(r.data.last_name)} · ${escapeHtml(r.data.time_label)} · ${escapeHtml(r.data.status)}${r.data.source ? ' · ' + escapeHtml(r.data.source) : ''} — click for actions">${escapeHtml(r.data.time_label || '?')} ${escapeHtml(r.data.first_name || '')}${adBadge}</div>`;
         }).join('')}
