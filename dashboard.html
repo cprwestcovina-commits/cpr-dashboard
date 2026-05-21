@@ -1805,6 +1805,24 @@ function renderCalendarPage() {
 }
 
 // === LEADS ===
+// Source helpers — paid ad vs organic vs manual vs unknown
+const SOURCE_META = {
+  paid_ad: { label: 'Paid Ad',  emoji: '💰', color: '#C0392B' },
+  organic: { label: 'Organic',  emoji: '🌱', color: '#1e8449' },
+  manual:  { label: 'Manual',   emoji: '📞', color: '#2874A6' },
+  unknown: { label: 'Unknown',  emoji: '❓', color: '#9C9C9C' },
+};
+function sourceOf(record) {
+  const s = ((record.data || record).source || '').toLowerCase();
+  if (SOURCE_META[s]) return s;
+  return 'unknown';
+}
+function sourcePill(record) {
+  const s = sourceOf(record);
+  const m = SOURCE_META[s];
+  return `<span class="pill" style="background:${m.color}1A;color:${m.color};">${m.emoji} ${m.label.toUpperCase()}</span>`;
+}
+
 // Course pricing for revenue calculations
 const COURSE_PRICE = {
   bls: 89, aha_bls: 89,
@@ -1855,7 +1873,7 @@ function renderLeads() {
       <div class="sub">${s.sub}</div>
     </div>`).join('') + (breakdownStr ? `<div style="grid-column:1/-1;font-size:12px;color:var(--gray-500);text-align:center;margin-top:-4px;">By course: ${breakdownStr}</div>` : '');
   document.getElementById('leadsList').innerHTML = rows.length
-    ? `<table><thead><tr><th>Student</th><th>Email</th><th>Phone</th><th>Wanted Date</th><th>Submitted</th><th>Course</th><th></th></tr></thead><tbody>` +
+    ? `<table><thead><tr><th>Student</th><th>Email</th><th>Phone</th><th>Wanted Date</th><th>Submitted</th><th>Course</th><th>Source</th><th></th></tr></thead><tbody>` +
       rows.map(r => {
         const days = r.data.submitted_at ? Math.round((Date.now() - new Date(r.data.submitted_at).getTime())/86400000) : '?';
         const ageColor = days >= 5 ? 'var(--red)' : (days >= 2 ? 'var(--orange)' : 'var(--gray-700)');
@@ -1866,6 +1884,7 @@ function renderLeads() {
           <td>${escapeHtml(fmtDate(r.data.date))}<br><span class="small">${escapeHtml(r.data.time_label || '')}</span></td>
           <td style="color:${ageColor};font-weight:600;">${days}d ago</td>
           <td>${courseLabel(r.data.course_type)}</td>
+          <td>${sourcePill(r)}</td>
           <td style="white-space:nowrap;">
             <a class="action-link" href="mailto:${escapeHtml(r.data.email)}?subject=About%20your%20CPR%20West%20Covina%20booking&body=Hi%20${encodeURIComponent(r.data.first_name || '')}%2C%0A%0AJust%20following%20up%20on%20your%20booking%20request.%20Want%20me%20to%20hold%20your%20seat%3F">Follow up</a>
             <button onclick="actionDelete('${escapeHtml(r.key)}')" title="Delete lead permanently" style="background:transparent;border:none;color:var(--red);cursor:pointer;font-size:16px;margin-left:8px;padding:2px 4px;">🗑</button>
@@ -1876,6 +1895,95 @@ function renderLeads() {
 
   // ---- Monthly revenue loss breakdown ----
   renderMonthlyLeadLoss();
+  // ---- Paid vs Organic side-by-side ----
+  renderSourceBreakdown();
+}
+
+// ====================================================================
+// PAID vs ORGANIC breakdown — comparison card on the Leads tab
+// ====================================================================
+function renderSourceBreakdown() {
+  let host = document.getElementById('sourceBreakdownHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'sourceBreakdownHost';
+    host.style.marginTop = '24px';
+    document.querySelector('#page-leads .card').appendChild(host);
+  }
+
+  // For each source, compute: total leads, pending, confirmed (wins), cancelled, revenue won, revenue at stake, conversion rate
+  const sources = ['paid_ad', 'organic', 'manual', 'unknown'];
+  const stats = {};
+  sources.forEach(s => stats[s] = { total:0, pending:0, confirmed:0, cancelled:0, expired:0, revenueWon:0, revenueAtStake:0 });
+
+  RECORDS.forEach(r => {
+    const s = sourceOf(r);
+    if (!stats[s]) return;
+    stats[s].total++;
+    const price = priceFor(r.data.course_type);
+    const status = r.data.status;
+    if (status === 'pending') {
+      stats[s].pending++;
+      stats[s].revenueAtStake += price;
+    } else if (status === 'confirmed') {
+      stats[s].confirmed++;
+      stats[s].revenueWon += price;
+    } else if (status === 'cancelled') {
+      stats[s].cancelled++;
+    } else if (status === 'expired') {
+      stats[s].expired++;
+    }
+  });
+
+  const conversionRate = (s) => s.total ? Math.round(100 * s.confirmed / s.total) : 0;
+
+  // Filter out sources with zero records to keep the card uncluttered
+  const visibleSources = sources.filter(s => stats[s].total > 0);
+  if (!visibleSources.length) {
+    host.innerHTML = '';
+    return;
+  }
+
+  const cardHtml = visibleSources.map(s => {
+    const m = SOURCE_META[s];
+    const st = stats[s];
+    const conv = conversionRate(st);
+    return `<div style="flex:1;min-width:180px;background:#fff;border:2px solid ${m.color};border-radius:10px;padding:14px 16px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+        <strong style="color:${m.color};font-size:14px;">${m.emoji} ${m.label}</strong>
+        <span style="font-size:11px;color:var(--gray-500);">${st.total} total</span>
+      </div>
+      <div style="font-size:28px;font-weight:800;color:${m.color};line-height:1;">${conv}%</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:10px;">conversion rate</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <tr><td style="color:var(--gray-500);">Won</td><td style="text-align:right;font-weight:600;color:var(--green);">${st.confirmed} · $${st.revenueWon.toLocaleString()}</td></tr>
+        <tr><td style="color:var(--gray-500);">Pending</td><td style="text-align:right;color:var(--orange);">${st.pending} · $${st.revenueAtStake.toLocaleString()}</td></tr>
+        ${st.cancelled ? `<tr><td style="color:var(--gray-500);">Cancelled</td><td style="text-align:right;color:var(--gray-500);">${st.cancelled}</td></tr>` : ''}
+        ${st.expired ? `<tr><td style="color:var(--gray-500);">Expired</td><td style="text-align:right;color:var(--gray-500);">${st.expired}</td></tr>` : ''}
+      </table>
+    </div>`;
+  }).join('');
+
+  // Verdict line — which is winning?
+  const known = visibleSources.filter(s => s !== 'unknown' && s !== 'manual');
+  let verdict = '';
+  if (known.length === 2) {
+    const a = known[0], b = known[1];
+    const ca = conversionRate(stats[a]), cb = conversionRate(stats[b]);
+    if (ca > cb) verdict = `<p style="margin-top:14px;font-size:13px;color:var(--gray-700);">📈 <strong>${SOURCE_META[a].label}</strong> is converting <strong>${ca - cb}%</strong> better than <strong>${SOURCE_META[b].label}</strong>.</p>`;
+    else if (cb > ca) verdict = `<p style="margin-top:14px;font-size:13px;color:var(--gray-700);">📈 <strong>${SOURCE_META[b].label}</strong> is converting <strong>${cb - ca}%</strong> better than <strong>${SOURCE_META[a].label}</strong>.</p>`;
+    else verdict = `<p style="margin-top:14px;font-size:13px;color:var(--gray-700);">📊 Both sources converting at the same rate (${ca}%).</p>`;
+  }
+
+  host.innerHTML = `
+    <h2 style="margin-bottom:6px;">📊 Paid Ad vs Organic vs Manual</h2>
+    <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">
+      Conversion rate by traffic source. Tells you which acquisition channel is actually closing — vs which is just generating clicks.
+    </p>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">${cardHtml}</div>
+    ${verdict}
+    ${stats.unknown.total > 0 ? `<p style="margin-top:8px;font-size:11px;color:var(--gray-500);">⚠ ${stats.unknown.total} records have unknown source (older bookings from before source tagging was fixed). New bookings will be tagged correctly going forward.</p>` : ''}
+  `;
 }
 
 function renderMonthlyLeadLoss() {
