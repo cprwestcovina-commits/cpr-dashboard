@@ -644,6 +644,7 @@
     <div class="tab" data-tab="students" onclick="switchTab('students')">👥 Students</div>
     <div class="tab" data-tab="renewals" onclick="switchTab('renewals')">🔄 Renewals <span class="badge" id="renewalsBadge" style="display:none;">0</span></div>
     <div class="tab" data-tab="pipeline" onclick="switchTab('pipeline')">⚡ Pipeline <span class="badge" id="pipelineLive" style="display:none;background:var(--green);">LIVE</span></div>
+    <div class="tab" data-tab="todo" onclick="switchTab('todo')">✅ TODO <span class="badge" id="todoBadge" style="display:none;background:var(--orange);">0</span></div>
     <div class="tab" data-tab="logs" onclick="switchTab('logs')">🛠 Logs &amp; Debug</div>
   </div>
 
@@ -764,6 +765,26 @@
           <div class="filter-chip" data-filter="renewal" onclick="setStudentFilter('renewal')">Renewal</div>
         </div>
         <div id="studentsList"></div>
+      </div>
+    </div>
+
+    <!-- TODO TAB -->
+    <div class="page" id="page-todo">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+          <h2 style="margin:0;">Project TODO <span class="count" id="todoCount">—</span></h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="todoProgress" style="font-size:13px;color:var(--gray-500);"></span>
+            <button class="btn btn-sm" onclick="loadTodo()">↻ Refresh</button>
+          </div>
+        </div>
+        <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">
+          Live view of <code>TODO.txt</code> from the GitHub repo. Edit the file locally and push — refresh here to see updates. <span style="color:var(--gray-700);" id="todoUpdated"></span>
+        </p>
+        <div id="todoProgressBar" style="height:8px;border-radius:4px;background:var(--gray-100);overflow:hidden;margin-bottom:18px;">
+          <div id="todoProgressFill" style="height:100%;width:0;background:linear-gradient(90deg,var(--green) 0%,#27ae60 100%);transition:width 0.5s;"></div>
+        </div>
+        <div id="todoContent"><div class="empty">Loading…</div></div>
       </div>
     </div>
 
@@ -1124,6 +1145,7 @@ function render() {
   if (currentTab === 'students') renderStudents();
   if (currentTab === 'renewals') renderRenewalsPage();
   if (currentTab === 'pipeline') renderPipelinePage();
+  if (currentTab === 'todo') loadTodo();
   if (currentTab === 'logs') renderLogs();
 }
 
@@ -2976,6 +2998,282 @@ saveEdit = async function() {
 };
 const __origCloseEdit = closeEdit;
 closeEdit = function() { window.__manualAddMode = false; __origCloseEdit(); };
+
+// ====================================================================
+// TODO TAB — loads TODO.txt from the deployed site and renders it
+// ====================================================================
+async function loadTodo() {
+  const host = document.getElementById('todoContent');
+  if (!host) return;
+  host.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    // Try the deployed site first (same origin), fall back to GitHub raw if 404
+    let text = '';
+    try {
+      const r = await fetch('/TODO.txt?_=' + Date.now());
+      if (r.ok) text = await r.text();
+      else throw new Error('local 404');
+    } catch (_) {
+      const r2 = await fetch('https://raw.githubusercontent.com/cprwestcovina-commits/cpr-dashboard/main/TODO.txt?_=' + Date.now());
+      text = await r2.text();
+    }
+    renderTodo(text);
+  } catch (e) {
+    host.innerHTML = `<div class="empty">Could not load TODO.txt: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderTodo(raw) {
+  const lines = raw.split('\n');
+  // Parse: detect section headers (lines surrounded by ━━━━), items ([ ] / [x]), and plain text
+  const sections = [];
+  let current = { title: '(top)', items: [], descLines: [] };
+  let lastWasDivider = false;
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (/^━+$/.test(ln.trim())) {
+      // Divider — next non-divider line is the section title
+      if (lastWasDivider) continue;
+      lastWasDivider = true;
+      continue;
+    }
+    if (lastWasDivider && ln.trim()) {
+      // Title line after a top divider
+      if (current.title !== '(top)' || current.items.length || current.descLines.length) sections.push(current);
+      current = { title: ln.trim(), items: [], descLines: [] };
+      lastWasDivider = false;
+      continue;
+    }
+    lastWasDivider = false;
+    // Item: [ ] or [x]
+    const m = ln.match(/^\[\s*([ x])\s*\]\s+(.*)$/);
+    if (m) {
+      current.items.push({ done: m[1].toLowerCase() === 'x', text: m[2], notes: [] });
+      continue;
+    }
+    // Indented continuation of an item
+    if (current.items.length && /^\s{2,}\S/.test(ln)) {
+      current.items[current.items.length - 1].notes.push(ln.replace(/^\s+/, ''));
+      continue;
+    }
+    // Otherwise treat as section description / note
+    if (ln.trim()) current.descLines.push(ln);
+  }
+  sections.push(current);
+
+  // Compute progress
+  let total = 0, done = 0;
+  sections.forEach(s => s.items.forEach(it => { total++; if (it.done) done++; }));
+  const pct = total ? Math.round(100 * done / total) : 0;
+  document.getElementById('todoCount').textContent = `${done}/${total}`;
+  document.getElementById('todoProgress').textContent = `${pct}% complete`;
+  document.getElementById('todoProgressFill').style.width = pct + '%';
+  document.getElementById('todoUpdated').textContent = `Last loaded ${new Date().toLocaleTimeString()}.`;
+
+  // Badge: count of open items on the tab
+  const badge = document.getElementById('todoBadge');
+  if (badge) {
+    const open = total - done;
+    badge.textContent = open;
+    badge.style.display = open > 0 ? 'inline-block' : 'none';
+  }
+
+  // Render
+  const html = sections
+    .filter(s => s.items.length || s.descLines.length)
+    .map(s => {
+      const sectionPct = s.items.length ? Math.round(100 * s.items.filter(it=>it.done).length / s.items.length) : null;
+      const headerColor = !s.items.length ? 'var(--gray-700)' : (sectionPct === 100 ? 'var(--green)' : 'var(--gray-900)');
+      return `<div style="margin-bottom:24px;">
+        ${s.title !== '(top)' ? `<h3 style="font-size:15px;font-weight:700;color:${headerColor};margin-bottom:8px;border-bottom:1px solid var(--gray-200);padding-bottom:6px;">${escapeHtml(s.title)} ${s.items.length ? `<span style="font-weight:400;font-size:12px;color:var(--gray-500);">${s.items.filter(it=>it.done).length}/${s.items.length}</span>` : ''}</h3>` : ''}
+        ${s.descLines.length ? `<div style="font-size:12px;color:var(--gray-500);margin-bottom:10px;white-space:pre-wrap;font-family:monospace;">${escapeHtml(s.descLines.join('\n'))}</div>` : ''}
+        ${s.items.map(it => `<div style="padding:8px 12px;background:${it.done ? 'var(--green-light)' : '#fff'};border:1px solid ${it.done ? '#a9dfbf' : 'var(--gray-200)'};border-radius:6px;margin-bottom:6px;display:flex;gap:10px;align-items:flex-start;">
+          <span style="font-size:16px;color:${it.done ? 'var(--green)' : 'var(--gray-300)'};line-height:1.4;flex-shrink:0;">${it.done ? '✓' : '○'}</span>
+          <div style="flex:1;${it.done ? 'color:var(--gray-700);' : ''}">
+            <div style="font-size:13px;line-height:1.5;${it.done ? 'text-decoration:line-through;text-decoration-color:var(--gray-300);' : ''}">${escapeHtml(it.text)}</div>
+            ${it.notes.length ? `<div style="font-size:11px;color:var(--gray-500);margin-top:4px;white-space:pre-wrap;font-family:monospace;line-height:1.4;">${escapeHtml(it.notes.join('\n'))}</div>` : ''}
+          </div>
+        </div>`).join('')}
+      </div>`;
+    }).join('');
+
+  document.getElementById('todoContent').innerHTML = html;
+}
+
+// ====================================================================
+// CUSTOMER LTV — augment Students tab with top-spending customers
+// ====================================================================
+function computeLTV() {
+  // Group all confirmed bookings by email, sum revenue + bookings + first/last date
+  const byEmail = {};
+  RECORDS.forEach(r => {
+    const d = r.data;
+    if (d.status !== 'confirmed' || !d.email) return;
+    const k = d.email.toLowerCase();
+    if (!byEmail[k]) byEmail[k] = {
+      email: d.email,
+      name: `${d.first_name || ''} ${d.last_name || ''}`.trim(),
+      phone: d.phone || '',
+      bookings: 0,
+      revenue: 0,
+      firstDate: '9999',
+      lastDate: '0000',
+      courses: new Set(),
+    };
+    const b = byEmail[k];
+    b.bookings++;
+    b.revenue += priceFor(d.course_type);
+    if ((d.date || '') < b.firstDate) b.firstDate = d.date || b.firstDate;
+    if ((d.date || '') > b.lastDate) b.lastDate = d.date || b.lastDate;
+    b.courses.add(courseLabel(d.course_type).replace(/<[^>]+>/g,''));
+  });
+  return Object.values(byEmail).sort((a,b) => b.revenue - a.revenue);
+}
+
+function renderLTV() {
+  let host = document.getElementById('ltvHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'ltvHost';
+    host.className = 'card';
+    host.style.marginTop = '16px';
+    const studentsPage = document.getElementById('page-students');
+    if (studentsPage) studentsPage.appendChild(host);
+  }
+  const customers = computeLTV();
+  const repeat = customers.filter(c => c.bookings > 1);
+  const totalRev = customers.reduce((s,c) => s + c.revenue, 0);
+  const avgLTV = customers.length ? Math.round(totalRev / customers.length) : 0;
+
+  host.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px;">
+      <h2 style="margin:0;">💎 Customer Lifetime Value</h2>
+      <span style="font-size:12px;color:var(--gray-500);">${customers.length} customers · ${repeat.length} repeat (${customers.length ? Math.round(100*repeat.length/customers.length) : 0}%) · Avg LTV $${avgLTV}</span>
+    </div>
+    <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">
+      Total revenue per customer across all confirmed bookings. Identifies repeat buyers worth keeping warm — great prospects for renewal nudges and cross-sells.
+    </p>
+    ${customers.length ? `<table style="width:100%;"><thead><tr>
+      <th>Customer</th><th>Email</th><th>Phone</th><th>Bookings</th><th>Courses</th><th>First</th><th>Last</th><th>Total LTV</th>
+    </tr></thead><tbody>
+      ${customers.slice(0, 30).map(c => `<tr style="${c.bookings > 1 ? 'background:linear-gradient(90deg, #f0f9f0 0%, transparent 50%);' : ''}">
+        <td><strong>${escapeHtml(c.name)}</strong>${c.bookings > 1 ? ' <span style="color:var(--green);font-size:11px;font-weight:600;">REPEAT</span>' : ''}</td>
+        <td><a class="action-link" href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a></td>
+        <td><a class="action-link" href="tel:${escapeHtml(c.phone.replace(/\D/g,''))}">${escapeHtml(c.phone)}</a></td>
+        <td><strong>${c.bookings}</strong></td>
+        <td><span class="small">${escapeHtml([...c.courses].join(', '))}</span></td>
+        <td><span class="small">${escapeHtml(fmtDate(c.firstDate))}</span></td>
+        <td><span class="small">${escapeHtml(fmtDate(c.lastDate))}</span></td>
+        <td><strong style="color:var(--green);">$${c.revenue.toLocaleString()}</strong></td>
+      </tr>`).join('')}
+    </tbody></table>
+    ${customers.length > 30 ? `<p style="text-align:center;color:var(--gray-500);font-size:12px;margin-top:10px;">Showing top 30 of ${customers.length} customers by revenue.</p>` : ''}
+    ` : '<div class="empty">No confirmed bookings yet.</div>'}
+  `;
+}
+
+// ====================================================================
+// TIME-OF-DAY ANALYTICS — augment Revenue tab
+// ====================================================================
+function renderTimeAnalytics() {
+  let host = document.getElementById('timeAnalyticsHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'timeAnalyticsHost';
+    host.className = 'card';
+    host.style.marginTop = '16px';
+    const revPage = document.getElementById('page-revenue');
+    if (revPage) revPage.appendChild(host);
+  }
+  // Group by hour-of-day and day-of-week (Pacific time, using submitted_at)
+  const hourly = Array(24).fill(0).map(() => ({ submitted: 0, paid: 0 }));
+  const dow    = Array(7).fill(0).map(() => ({ submitted: 0, paid: 0 }));
+  RECORDS.forEach(r => {
+    const sa = r.data.submitted_at;
+    if (!sa) return;
+    const d = new Date(sa);
+    const h = d.getHours();
+    const w = d.getDay();
+    hourly[h].submitted++;
+    dow[w].submitted++;
+    if (r.data.status === 'confirmed') {
+      hourly[h].paid++;
+      dow[w].paid++;
+    }
+  });
+  const maxHourly = Math.max(1, ...hourly.map(x => x.submitted));
+  const maxDow    = Math.max(1, ...dow.map(x => x.submitted));
+  const dowNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const fmtHour = (h) => {
+    if (h === 0) return '12 AM';
+    if (h === 12) return '12 PM';
+    return (h % 12) + (h < 12 ? ' AM' : ' PM');
+  };
+
+  const hourlyRows = hourly.map((x, h) => {
+    if (x.submitted === 0) return '';  // skip empty hours for clarity
+    const pct = Math.round(100 * x.submitted / maxHourly);
+    const conv = x.submitted ? Math.round(100 * x.paid / x.submitted) : 0;
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px;width:60px;">${fmtHour(h)}</td>
+      <td>${x.submitted}</td>
+      <td><span class="small">${conv}%</span></td>
+      <td style="width:60%;">
+        <div style="background:var(--gray-100);height:14px;border-radius:3px;overflow:hidden;">
+          <div style="background:var(--blue);height:100%;width:${pct}%;"></div>
+        </div>
+      </td>
+    </tr>`;
+  }).filter(Boolean).join('');
+
+  const dowRows = dow.map((x, i) => {
+    const pct = Math.round(100 * x.submitted / maxDow);
+    const conv = x.submitted ? Math.round(100 * x.paid / x.submitted) : 0;
+    return `<tr>
+      <td style="font-weight:600;width:60px;">${dowNames[i]}</td>
+      <td>${x.submitted}</td>
+      <td><span class="small">${conv}%</span></td>
+      <td style="width:60%;">
+        <div style="background:var(--gray-100);height:14px;border-radius:3px;overflow:hidden;">
+          <div style="background:var(--blue);height:100%;width:${pct}%;"></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  host.innerHTML = `
+    <h2 style="margin-bottom:6px;">⏱ Time-of-Day Analytics</h2>
+    <p style="color:var(--gray-500);font-size:13px;margin-bottom:18px;">
+      When leads submit (and convert). Helps you schedule ad spend and decide when to be available to answer phone calls.
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;">
+      <div>
+        <h3 style="font-size:14px;margin-bottom:8px;">By Hour of Day</h3>
+        ${hourlyRows ? `<table style="width:100%;font-size:13px;"><thead><tr>
+          <th>Time</th><th>Leads</th><th>Conv</th><th></th>
+        </tr></thead><tbody>${hourlyRows}</tbody></table>` : '<div class="empty">No data yet.</div>'}
+      </div>
+      <div>
+        <h3 style="font-size:14px;margin-bottom:8px;">By Day of Week</h3>
+        ${dowRows ? `<table style="width:100%;font-size:13px;"><thead><tr>
+          <th>Day</th><th>Leads</th><th>Conv</th><th></th>
+        </tr></thead><tbody>${dowRows}</tbody></table>` : '<div class="empty">No data yet.</div>'}
+      </div>
+    </div>
+  `;
+}
+
+// Hook into existing renderers to inject these augmentations
+const __origRenderStudents = renderStudents;
+renderStudents = function() {
+  __origRenderStudents();
+  renderLTV();
+};
+const __origRenderRevenue = renderRevenue;
+renderRevenue = function() {
+  __origRenderRevenue();
+  renderTimeAnalytics();
+};
 </script>
 </body>
 </html>

@@ -4,6 +4,41 @@ Last updated: 2026-05-21
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LEAD CADENCE / SMS BUILD (paused — pick GHL vs Twilio first)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] DECIDE: SMS provider — GoHighLevel OR Twilio
+       - GHL pros: all-in-one, calls + voicemail drops + CRM built-in (~$97/mo)
+       - Twilio pros: 10× cheaper for just SMS (~$5-15/mo at our volume)
+       - Recommendation: GHL if already paying for it; Twilio if SMS is all we need
+
+Target cadence for non-paying leads:
+
+  BLS / Heartsaver / Renewal ($89-98) — 5 touches over 7 days:
+    T+0      📧 Pay-click nudge email           (DONE)
+    T+15 min 📞 Owner phone call                (MANUAL — make it a habit)
+    T+2 hr   📧 2-hour follow-up email          (DONE)
+    T+24 hr  💬 Day 1 SMS — "seat still open"   (TODO)
+    Day 5    📧+💬 COMEBACK30 email + SMS       (email DONE, SMS TODO)
+
+  ACLS / PALS ($250) — 7 touches over 14 days:
+    Above through Day 5, then add:
+    Day 7    💬 SMS — "2 seats left for {date}"          (TODO)
+    Day 10   📧 Personal email from owner (no template)  (TODO)
+    Day 14   🤐 Auto-archive                              (DONE)
+
+[ ] BUILD: Day 1 SMS scenario (after picking GHL or Twilio)
+[ ] BUILD: Day 5 SMS in scenario 5118321 (alongside COMEBACK30 email)
+[ ] BUILD: Day 7 SMS scenario for ACLS/PALS only
+[ ] BUILD: Day 10 personal email template + scenario for ACLS/PALS only
+[ ] BUILD: Instant "hot lead" admin SMS on pay-click — texts owner with
+       customer name + phone within 30 sec so they can call while hot
+
+[ ] BUILD (no SMS needed): Fill 2hr→5day gap with Day 1 + Day 3 emails
+       "Spots filling fast for {date}" / "Last few seats — book today"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 2 — CARRYOVER (do next)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
