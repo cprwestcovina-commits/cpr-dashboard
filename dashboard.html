@@ -894,6 +894,13 @@
         <option value="cancelled">Cancelled</option>
       </select>
     </div>
+    <div id="editSendConfirmRow" style="display:none;background:#FEF9E7;border:1px solid #F4D03F;border-radius:8px;padding:10px 12px;margin-top:8px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:500;">
+        <input type="checkbox" id="editSendConfirm" style="width:18px;height:18px;cursor:pointer;">
+        <span>📧 Send confirmation email + Google Calendar invite to student</span>
+      </label>
+      <div style="font-size:11px;color:#7A5C00;margin-top:4px;margin-left:26px;">Fires the Manual Booking Confirmation scenario. Student gets email + calendar event.</div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px;flex-wrap:wrap;">
       <button class="btn" onclick="actionDelete(editingKey)" style="background:#fff;color:var(--red);border:1px solid var(--red);">🗑 Delete</button>
       <div style="display:flex;gap:8px;">
@@ -1721,7 +1728,8 @@ const PIPELINE_STAGES = [
     icon: '✅', name: 'Confirmation', sub: 'Payment complete → fulfillment',
     what: 'Square fires payment.updated COMPLETED → Integration Webhooks scenario verifies, finds the matching pending record, sends the customer their confirmation + calendar invite, alerts admin, and flips datastore status to confirmed.',
     scenarios: [
-      { id: 5113311, name: 'Integration Webhooks', what: 'Hook 2328890. Filtered to payment.updated AND status=COMPLETED (kills Square\'s ×2 duplicates). SearchRecord limit 1 sorted by submitted_at desc + status=pending (prevents repeat-customer spam). Sends customer confirmation email, creates Google Calendar event with student as attendee, sends admin paid-booking alert, flips datastore status to confirmed.', schedule: 'instant (webhook)' },
+      { id: 5113311, name: 'Integration Webhooks', what: 'Hook 2328890. Filtered to payment.updated AND status=COMPLETED + matched record submitted within last 15min (prevents Square\'s 3x duplicates from confirming older pending leads). SearchRecord limit 1 sorted by submitted_at desc + status=pending. Sends customer confirmation email, creates Google Calendar event with student as attendee, sends admin paid-booking alert, flips datastore status to confirmed.', schedule: 'instant (webhook)' },
+      { id: 5137480, name: 'Manual Booking Confirmation', what: 'Triggered when admin checks "Send confirmation" on Manual Add modal. Sends customer confirmation email + creates Google Calendar event + sends admin alert. Used for walk-ins and phone bookings.', schedule: 'on-demand (webhook)' },
     ],
   },
   {
@@ -1747,7 +1755,7 @@ const PIPELINE_STAGES = [
     ],
   },
 ];
-const PIPELINE_SCENARIOS = [5113311, 5124029, 5126180, 5118287, 5118320, 5118321, 5118322, 5126033, 5127186, 5128031, 5130806, 5131291, 5131292];
+const PIPELINE_SCENARIOS = [5113311, 5124029, 5126180, 5118287, 5118320, 5118321, 5118322, 5126033, 5127186, 5128031, 5130806, 5131291, 5131292, 5137480];
 const PIPELINE_NAMES = {
   5113311: 'Integration Webhooks',
   5118287: '24hr Class Reminder',
@@ -1762,6 +1770,7 @@ const PIPELINE_NAMES = {
   5130806: 'Pay-click 2-Hour Follow-up',
   5131291: 'Post-Class Thank-You',
   5131292: 'Stale Pending Cleanup',
+  5137480: 'Manual Booking Confirmation',
 };
 var pipelinePollHandle = null;
 var pipelineLastSig = '';
@@ -2317,6 +2326,10 @@ function openEdit(key) {
   const r = RECORDS.find(x => x.key === key);
   if (!r) return;
   editingKey = key;
+  // Reset manual add UI (this is an edit, not an add)
+  window.__manualAddMode = false;
+  const confirmRow = document.getElementById('editSendConfirmRow');
+  if (confirmRow) confirmRow.style.display = 'none';
   const d = r.data;
   document.getElementById('editFirstName').value = d.first_name || '';
   document.getElementById('editLastName').value = d.last_name || '';
@@ -2719,6 +2732,8 @@ function setLeadsView_uiOnly(v) {
 // ====================================================================
 // MANUAL ADD BOOKING
 // ====================================================================
+const MANUAL_CONFIRM_WEBHOOK = 'https://hook.us2.make.com/v4uxgw7pstxpcjmg63iii2dcy837kcwj';
+
 function openManualAdd() {
   // Reuse editModal but in "create" mode (editingKey will be a new generated key)
   const ts = Date.now();
@@ -2733,6 +2748,8 @@ function openManualAdd() {
   document.getElementById('editCourse').value = 'bls';
   document.getElementById('editStatus').value = 'confirmed';  // manual adds are always confirmed
   document.getElementById('editError').style.display = 'none';
+  document.getElementById('editSendConfirmRow').style.display = 'block';
+  document.getElementById('editSendConfirm').checked = true;  // default on for manual adds
   document.getElementById('editModal').style.display = 'flex';
   // Tag this as a manual add so saveEdit knows to fill default fields
   window.__manualAddMode = true;
@@ -2776,6 +2793,35 @@ saveEdit = async function() {
         body: JSON.stringify(newData),
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
+
+      // If checkbox is on, fire Manual Confirmation webhook → sends email + creates calendar event
+      const shouldSendConfirm = document.getElementById('editSendConfirm').checked;
+      if (shouldSendConfirm && newData.email && newData.email.includes('@')) {
+        // Convert 12-hour time labels to 24-hour for calendar event
+        const to24 = (s) => {
+          const m = (s || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+          if (!m) return '10:00';
+          let h = parseInt(m[1]); const min = m[2]; const p = m[3].toUpperCase();
+          if (p === 'PM' && h !== 12) h += 12;
+          if (p === 'AM' && h === 12) h = 0;
+          return String(h).padStart(2,'0') + ':' + min;
+        };
+        const confirmPayload = {
+          ...newData,
+          time_label_24: to24(newData.time_label),
+          time_end_24: to24(newData.time_end),
+        };
+        try {
+          await fetch(MANUAL_CONFIRM_WEBHOOK, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(confirmPayload),
+          });
+        } catch (e) {
+          console.warn('Confirmation webhook failed (record was still saved):', e);
+        }
+      }
+
       window.__manualAddMode = false;
       closeEdit();
       await loadAll();
