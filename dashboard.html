@@ -506,6 +506,83 @@
     margin-top: 2px;
   }
 
+  /* ===== Lead Pipeline (kanban) ===== */
+  .kanban {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 1fr);
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    align-items: start;
+  }
+  .kb-col {
+    background: var(--gray-100);
+    border-radius: 10px;
+    padding: 10px;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .kb-col-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--gray-700);
+    padding: 4px 4px 8px;
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .kb-col-count {
+    background: #fff;
+    color: var(--gray-700);
+    font-weight: 700;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    border: 1px solid var(--gray-200);
+  }
+  .kb-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    border-left: 4px solid var(--gray-300);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .kb-card.stage-0 { border-left-color: #9CA3AF; }   /* new */
+  .kb-card.stage-1 { border-left-color: #2874A6; }   /* called */
+  .kb-card.stage-2 { border-left-color: #16A085; }   /* text 1 */
+  .kb-card.stage-3 { border-left-color: #8E44AD; }   /* email 1 */
+  .kb-card.stage-4 { border-left-color: #D35400; }   /* text 2 */
+  .kb-card.stage-5 { border-left-color: #C0392B; }   /* email 2 / final */
+  .kb-card.stage-6 { border-left-color: #6B7280; opacity:0.55; }  /* lost */
+  .kb-card-name { font-weight: 700; font-size: 14px; color: var(--gray-900); }
+  .kb-card-meta { font-size: 11px; color: var(--gray-500); }
+  .kb-card-actions { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+  .kb-btn {
+    border: 1px solid var(--gray-200);
+    background: #fff;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    color: var(--gray-700);
+  }
+  .kb-btn:hover { background: var(--gray-100); border-color: var(--gray-300); }
+  .kb-btn.advance { background: var(--green); color: #fff; border-color: var(--green); }
+  .kb-btn.advance:hover { background: #186a3b; }
+  .kb-btn.lost { color: var(--red); }
+  .kb-btn.back { color: var(--gray-500); }
+
   /* Mobile responsive */
   @media (max-width: 768px) {
     .wrap { padding: 0 12px 80px; }
@@ -613,11 +690,14 @@
     <!-- CALENDAR TAB -->
     <div class="page" id="page-calendar">
       <div class="card">
-        <div class="calendar-controls">
-          <button class="btn btn-sm" onclick="changeMonth(-1)">‹ Prev</button>
-          <h3 id="monthLabel"></h3>
-          <button class="btn btn-sm" onclick="changeMonth(1)">Next ›</button>
-          <button class="btn btn-sm" onclick="resetMonth()">Today</button>
+        <div class="calendar-controls" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="btn btn-sm" onclick="changeMonth(-1)">‹ Prev</button>
+            <h3 id="monthLabel" style="margin:0 8px;"></h3>
+            <button class="btn btn-sm" onclick="changeMonth(1)">Next ›</button>
+            <button class="btn btn-sm" onclick="resetMonth()">Today</button>
+          </div>
+          <button class="btn btn-sm" onclick="openManualAdd()" style="background:var(--green);color:#fff;border:none;font-weight:600;">➕ Manual Add Booking</button>
         </div>
         <div style="display:flex;gap:6px;margin:12px 0;">
           <div class="filter-chip active" data-srcfilter="all" onclick="setSourceFilter('all')">All</div>
@@ -639,7 +719,13 @@
     <!-- LEADS TAB -->
     <div class="page" id="page-leads">
       <div class="card">
-        <h2>Pending Leads <span class="count" id="leadsCount">0</span></h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+          <h2 style="margin:0;">Pending Leads <span class="count" id="leadsCount">0</span></h2>
+          <div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:8px;">
+            <button id="leadsViewTable" onclick="setLeadsView('table')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">📋 Table</button>
+            <button id="leadsViewPipeline" onclick="setLeadsView('pipeline')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🎯 Pipeline</button>
+          </div>
+        </div>
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:16px;">
           Students who clicked Pay on the widget but haven't completed Square checkout yet. Reach out to close the sale.
         </p>
@@ -2476,6 +2562,236 @@ document.addEventListener('keydown', (e) => {
     if (document.getElementById('editModal').style.display === 'flex') closeEdit();
   }
 });
+
+// ====================================================================
+// LEAD PIPELINE (kanban view)
+// ====================================================================
+
+// Stage definitions in order. Empty/null lead_stage = stage 0 (untouched).
+const LEAD_STAGES = [
+  { key: 'new',     label: '🆕 New',         hint: 'Just submitted, no contact yet' },
+  { key: 'called',  label: '📞 Called',       hint: 'Phone attempted' },
+  { key: 'text1',   label: '💬 Text 1',      hint: 'First text sent' },
+  { key: 'email1',  label: '📧 Email 1',     hint: 'First email sent' },
+  { key: 'text2',   label: '💬 Text 2',      hint: 'Second text sent' },
+  { key: 'email2',  label: '📧 Final Promo', hint: 'Final $30-off push' },
+  { key: 'lost',    label: '❌ Lost',         hint: 'Gave up, dead lead' },
+];
+function stageIndex(record) {
+  const s = (record.data.lead_stage || 'new').toLowerCase();
+  const i = LEAD_STAGES.findIndex(x => x.key === s);
+  return i < 0 ? 0 : i;
+}
+
+async function setLeadStage(key, newStageKey) {
+  const r = RECORDS.find(x => x.key === key);
+  if (!r) return;
+  const newData = { ...r.data, lead_stage: newStageKey };
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(key)}?teamId=${CONFIG.teamId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(newData),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    r.data = newData;
+    render();
+  } catch (e) {
+    alert('Failed to update stage: ' + e.message);
+  }
+}
+function advanceLead(key) {
+  const r = RECORDS.find(x => x.key === key); if (!r) return;
+  const i = stageIndex(r);
+  if (i >= LEAD_STAGES.length - 1) return;
+  setLeadStage(key, LEAD_STAGES[i + 1].key);
+}
+function retreatLead(key) {
+  const r = RECORDS.find(x => x.key === key); if (!r) return;
+  const i = stageIndex(r);
+  if (i <= 0) return;
+  setLeadStage(key, LEAD_STAGES[i - 1].key);
+}
+function markLeadLost(key) {
+  const r = RECORDS.find(x => x.key === key); if (!r) return;
+  if (!confirm(`Mark ${r.data.first_name} ${r.data.last_name} as Lost? They'll be moved out of the active pipeline.`)) return;
+  setLeadStage(key, 'lost');
+}
+function resetLeadStage(key) { setLeadStage(key, 'new'); }
+
+// --- View toggle ---
+function getLeadsView() {
+  return localStorage.getItem('leadsView') || 'table';
+}
+function setLeadsView(v) {
+  localStorage.setItem('leadsView', v);
+  // Update toggle UI
+  const tbtn = document.getElementById('leadsViewTable');
+  const pbtn = document.getElementById('leadsViewPipeline');
+  if (tbtn && pbtn) {
+    const active = { background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' };
+    tbtn.style.background = v === 'table' ? '#fff' : 'transparent';
+    tbtn.style.boxShadow = v === 'table' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+    pbtn.style.background = v === 'pipeline' ? '#fff' : 'transparent';
+    pbtn.style.boxShadow = v === 'pipeline' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+  }
+  renderLeads();
+}
+
+// --- Kanban renderer ---
+function renderLeadsKanban() {
+  const list = document.getElementById('leadsList');
+  const rows = RECORDS
+    .filter(r => r.data.status === 'pending')
+    .sort((a,b) => (b.data.submitted_at || '').localeCompare(a.data.submitted_at || ''));
+
+  // Group by stage
+  const byStage = LEAD_STAGES.map(s => []);
+  rows.forEach(r => byStage[stageIndex(r)].push(r));
+
+  list.innerHTML = `<div class="kanban">${
+    LEAD_STAGES.map((s, i) => {
+      const cards = byStage[i];
+      return `<div class="kb-col">
+        <div class="kb-col-header">
+          <span>${s.label}</span>
+          <span class="kb-col-count">${cards.length}</span>
+        </div>
+        ${cards.length ? cards.map(r => kanbanCardHtml(r, i)).join('') : '<div style="font-size:11px;color:var(--gray-500);text-align:center;padding:20px 0;">empty</div>'}
+      </div>`;
+    }).join('')
+  }</div>
+  <p style="font-size:12px;color:var(--gray-500);margin-top:14px;">Click <strong>Next →</strong> after each follow-up step. Once a lead pays, they leave the pipeline automatically. Cards drift right through your sequence: <em>Call → Text → Email → Text → Final Promo → Lost</em>.</p>`;
+}
+
+function kanbanCardHtml(r, stageIdx) {
+  const d = r.data;
+  const days = d.submitted_at ? Math.round((Date.now() - new Date(d.submitted_at).getTime())/86400000) : '?';
+  const ageColor = days >= 5 ? 'var(--red)' : (days >= 2 ? 'var(--orange)' : 'var(--gray-500)');
+  const phone = (d.phone || '').replace(/\D/g,'');
+  const isLost = stageIdx === LEAD_STAGES.length - 1;
+  return `<div class="kb-card stage-${stageIdx}">
+    <div class="kb-card-name">${escapeHtml(d.first_name||'')} ${escapeHtml(d.last_name||'')}</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;">${courseLabel(d.course_type)}<span style="color:${ageColor};font-weight:600;">${days}d</span></div>
+    <div class="kb-card-meta">📅 ${escapeHtml(fmtDate(d.date))} ${escapeHtml(d.time_label||'')}</div>
+    <div class="kb-card-meta" style="display:flex;gap:6px;flex-wrap:wrap;">
+      ${phone ? `<a href="tel:${phone}" style="color:var(--blue);text-decoration:none;">📞 ${escapeHtml(d.phone)}</a>` : ''}
+      ${d.email ? `<a href="mailto:${escapeHtml(d.email)}" style="color:var(--blue);text-decoration:none;overflow:hidden;text-overflow:ellipsis;">✉ ${escapeHtml(d.email)}</a>` : ''}
+    </div>
+    <div class="kb-card-actions">
+      ${!isLost && stageIdx < LEAD_STAGES.length - 2
+        ? `<button class="kb-btn advance" onclick="advanceLead('${escapeHtml(r.key)}')">Next →</button>`
+        : ''}
+      ${stageIdx > 0 ? `<button class="kb-btn back" onclick="retreatLead('${escapeHtml(r.key)}')">← Back</button>` : ''}
+      ${!isLost ? `<button class="kb-btn lost" onclick="markLeadLost('${escapeHtml(r.key)}')">❌ Lost</button>` : `<button class="kb-btn" onclick="resetLeadStage('${escapeHtml(r.key)}')">↻ Reopen</button>`}
+      <button class="kb-btn" onclick="openEdit('${escapeHtml(r.key)}')">✏ Edit</button>
+    </div>
+  </div>`;
+}
+
+// Hook into existing renderLeads to dispatch based on view preference.
+const __origRenderLeads = renderLeads;
+renderLeads = function() {
+  const view = getLeadsView();
+  if (view === 'pipeline') {
+    // Compute stats first (same as table view does)
+    const rows = RECORDS.filter(r => r.data.status === 'pending');
+    document.getElementById('leadsCount').textContent = rows.length;
+    // Reuse the revenue tile logic by calling the original then overriding the list
+    __origRenderLeads();
+    renderLeadsKanban();
+    setLeadsView_uiOnly('pipeline');
+  } else {
+    __origRenderLeads();
+    setLeadsView_uiOnly('table');
+  }
+};
+function setLeadsView_uiOnly(v) {
+  const tbtn = document.getElementById('leadsViewTable');
+  const pbtn = document.getElementById('leadsViewPipeline');
+  if (!tbtn || !pbtn) return;
+  tbtn.style.background = v === 'table' ? '#fff' : 'transparent';
+  tbtn.style.boxShadow = v === 'table' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+  pbtn.style.background = v === 'pipeline' ? '#fff' : 'transparent';
+  pbtn.style.boxShadow = v === 'pipeline' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+}
+
+// ====================================================================
+// MANUAL ADD BOOKING
+// ====================================================================
+function openManualAdd() {
+  // Reuse editModal but in "create" mode (editingKey will be a new generated key)
+  const ts = Date.now();
+  const rand = Math.random().toString(36).slice(2, 8);
+  editingKey = `manual-${ts}-${rand}`;
+  document.getElementById('editFirstName').value = '';
+  document.getElementById('editLastName').value = '';
+  document.getElementById('editEmail').value = '';
+  document.getElementById('editPhone').value = '';
+  document.getElementById('editDate').value = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+  document.getElementById('editTime').value = 'am';
+  document.getElementById('editCourse').value = 'bls';
+  document.getElementById('editStatus').value = 'confirmed';  // manual adds are always confirmed
+  document.getElementById('editError').style.display = 'none';
+  document.getElementById('editModal').style.display = 'flex';
+  // Tag this as a manual add so saveEdit knows to fill default fields
+  window.__manualAddMode = true;
+}
+
+// Wrap saveEdit to also handle manual-add creation case
+const __origSaveEdit = saveEdit;
+saveEdit = async function() {
+  if (window.__manualAddMode) {
+    const btn = document.getElementById('editSaveBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const timeVal = document.getElementById('editTime').value;
+      const timeMap = {
+        am:   { label: '10:00 AM', end: '12:00 PM' },
+        pm:   { label: '6:00 PM',  end: '8:00 PM' },
+        noon: { label: '12:00 PM', end: '4:00 PM' },
+      };
+      const dateStr = document.getElementById('editDate').value;
+      const dateFormatted = dateStr ? new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }) : '';
+      const newData = {
+        booking_id: editingKey,
+        email: document.getElementById('editEmail').value.trim(),
+        first_name: document.getElementById('editFirstName').value.trim(),
+        last_name: document.getElementById('editLastName').value.trim(),
+        phone: document.getElementById('editPhone').value.trim(),
+        date: dateStr,
+        date_formatted: dateFormatted,
+        time_label: timeMap[timeVal].label,
+        time_end: timeMap[timeVal].end,
+        location: '100 Barranca St #255-B, West Covina, CA 91791',
+        submitted_at: new Date().toISOString(),
+        status: document.getElementById('editStatus').value,
+        course_type: document.getElementById('editCourse').value,
+        square_payment_id: '',
+        source: 'manual',
+      };
+      const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(editingKey)}?teamId=${CONFIG.teamId}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(newData),
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      window.__manualAddMode = false;
+      closeEdit();
+      await loadAll();
+    } catch (e) {
+      const errEl = document.getElementById('editError');
+      errEl.textContent = 'Save failed: ' + e.message;
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+    return;
+  }
+  return __origSaveEdit();
+};
+const __origCloseEdit = closeEdit;
+closeEdit = function() { window.__manualAddMode = false; __origCloseEdit(); };
 </script>
 </body>
 </html>
