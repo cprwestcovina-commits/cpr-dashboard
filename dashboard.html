@@ -724,6 +724,7 @@
           <div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:8px;">
             <button id="leadsViewTable" onclick="setLeadsView('table')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">📋 Table</button>
             <button id="leadsViewPipeline" onclick="setLeadsView('pipeline')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🎯 Pipeline</button>
+            <button id="leadsViewWon" onclick="setLeadsView('won')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🏆 Wins</button>
           </div>
         </div>
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:16px;">
@@ -2707,13 +2708,12 @@ const __origRenderLeads = renderLeads;
 renderLeads = function() {
   const view = getLeadsView();
   if (view === 'pipeline') {
-    // Compute stats first (same as table view does)
-    const rows = RECORDS.filter(r => r.data.status === 'pending');
-    document.getElementById('leadsCount').textContent = rows.length;
-    // Reuse the revenue tile logic by calling the original then overriding the list
-    __origRenderLeads();
-    renderLeadsKanban();
+    __origRenderLeads();        // gives us the at-risk tiles + monthly loss
+    renderLeadsKanban();         // replaces the list with kanban
     setLeadsView_uiOnly('pipeline');
+  } else if (view === 'won') {
+    renderLeadsWon();
+    setLeadsView_uiOnly('won');
   } else {
     __origRenderLeads();
     setLeadsView_uiOnly('table');
@@ -2722,11 +2722,149 @@ renderLeads = function() {
 function setLeadsView_uiOnly(v) {
   const tbtn = document.getElementById('leadsViewTable');
   const pbtn = document.getElementById('leadsViewPipeline');
-  if (!tbtn || !pbtn) return;
-  tbtn.style.background = v === 'table' ? '#fff' : 'transparent';
-  tbtn.style.boxShadow = v === 'table' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
-  pbtn.style.background = v === 'pipeline' ? '#fff' : 'transparent';
-  pbtn.style.boxShadow = v === 'pipeline' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+  const wbtn = document.getElementById('leadsViewWon');
+  if (!tbtn || !pbtn || !wbtn) return;
+  [['table',tbtn],['pipeline',pbtn],['won',wbtn]].forEach(([k, btn]) => {
+    btn.style.background = v === k ? '#fff' : 'transparent';
+    btn.style.boxShadow = v === k ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+  });
+}
+
+// ====================================================================
+// LEADS WON view — shows converted leads with stats
+// ====================================================================
+function renderLeadsWon() {
+  // A "win" is a confirmed record that originally came through the pay-click flow
+  // (i.e., it has a submitted_at AND a square_payment_id, OR booking_id not starting with manual-).
+  // Manual adds are excluded from wins since they were never leads.
+  const wins = RECORDS.filter(r => {
+    const d = r.data;
+    if (d.status !== 'confirmed') return false;
+    if (!d.submitted_at) return false;
+    if ((d.booking_id || '').startsWith('manual-')) return false;  // manual adds aren't "wins"
+    return true;
+  });
+
+  // Stats
+  const t = today();
+  const monthStart = t.slice(0,7) + '-01';
+  const lastMonthDate = (() => { const d = new Date(); d.setMonth(d.getMonth()-1); return d; })();
+  const lastMonthStart = lastMonthDate.toISOString().slice(0,7) + '-01';
+  const lastMonthEnd = lastMonthDate.toISOString().slice(0,7) + '-31';
+
+  const thisMonthWins = wins.filter(r => (r.data.submitted_at || '').slice(0,10) >= monthStart);
+  const lastMonthWins = wins.filter(r => {
+    const d = (r.data.submitted_at || '').slice(0,10);
+    return d >= lastMonthStart && d <= lastMonthEnd;
+  });
+
+  // Conversion rate: wins / (wins + cancelled + still-pending) submitted in same period
+  const totalLeadsThisMonth = RECORDS.filter(r => {
+    const sa = (r.data.submitted_at || '').slice(0,10);
+    return sa >= monthStart && !(r.data.booking_id || '').startsWith('manual-');
+  });
+  const conversionRate = totalLeadsThisMonth.length
+    ? Math.round(100 * thisMonthWins.length / totalLeadsThisMonth.length)
+    : 0;
+
+  const sumRev = list => list.reduce((s, r) => s + priceFor(r.data.course_type), 0);
+  const thisMonthRev = sumRev(thisMonthWins);
+  const lastMonthRev = sumRev(lastMonthWins);
+  const allTimeRev = sumRev(wins);
+
+  // Update count badge
+  document.getElementById('leadsCount').textContent = wins.length;
+
+  // Time-to-close: avg minutes from submitted_at to (Square's confirmation = updated time)
+  // We don't store the confirmation timestamp, so approximate via square_payment_id presence
+  // For now, just show recent wins sorted by submission time.
+
+  const stats = [
+    { label: 'Wins This Month', val: thisMonthWins.length, sub: '$' + thisMonthRev.toLocaleString() + ' revenue', cls: 'green' },
+    { label: 'Wins Last Month', val: lastMonthWins.length, sub: '$' + lastMonthRev.toLocaleString() + ' revenue' },
+    { label: 'Conversion Rate', val: conversionRate + '%', sub: thisMonthWins.length + ' of ' + totalLeadsThisMonth.length + ' leads', cls: 'blue' },
+    { label: 'All-Time Wins', val: wins.length, sub: '$' + allTimeRev.toLocaleString() + ' revenue' },
+  ];
+
+  document.getElementById('leadsRevenueRow').innerHTML = stats.map(s => `
+    <div class="stat ${s.cls || ''}" style="padding:14px;">
+      <div class="label">${s.label}</div>
+      <div class="val" style="font-size:22px;">${s.val}</div>
+      <div class="sub">${s.sub}</div>
+    </div>`).join('');
+
+  // Trend MoM
+  const trend = lastMonthRev > 0
+    ? Math.round(100 * (thisMonthRev - lastMonthRev) / lastMonthRev)
+    : null;
+  const trendStr = trend === null ? '' :
+    (trend >= 0 ? `<span style="color:var(--green);font-weight:600;">↑ ${trend}%</span>` : `<span style="color:var(--red);font-weight:600;">↓ ${Math.abs(trend)}%</span>`);
+
+  // Recent wins table
+  const recentWins = [...wins].sort((a,b) =>
+    (b.data.submitted_at || '').localeCompare(a.data.submitted_at || '')
+  );
+
+  // Group wins by month for a small history chart
+  const byMonth = {};
+  wins.forEach(r => {
+    const ym = (r.data.submitted_at || '').slice(0,7);
+    if (!ym) return;
+    if (!byMonth[ym]) byMonth[ym] = { count: 0, revenue: 0 };
+    byMonth[ym].count++;
+    byMonth[ym].revenue += priceFor(r.data.course_type);
+  });
+  const months = Object.keys(byMonth).sort().reverse();
+  const peakRev = Math.max(1, ...Object.values(byMonth).map(b => b.revenue));
+
+  document.getElementById('leadsList').innerHTML = `
+    ${trendStr ? `<p style="text-align:center;font-size:13px;color:var(--gray-700);margin-bottom:18px;">Month-over-month revenue: ${trendStr} vs last month</p>` : ''}
+
+    ${months.length ? `<h3 style="margin:18px 0 10px;font-size:16px;">📈 Wins by Month</h3>
+    <table style="width:100%;margin-bottom:24px;">
+      <thead><tr>
+        <th>Month</th><th>Wins</th><th>Revenue</th><th style="width:50%;">vs peak month</th>
+      </tr></thead>
+      <tbody>
+        ${months.map(m => {
+          const b = byMonth[m];
+          const pct = Math.round(100 * b.revenue / peakRev);
+          const monthLabel = new Date(m + '-01T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+          return `<tr>
+            <td><strong>${escapeHtml(monthLabel)}</strong></td>
+            <td>${b.count}</td>
+            <td><strong style="color:var(--green);">$${b.revenue.toLocaleString()}</strong></td>
+            <td><div style="background:var(--gray-100);height:18px;border-radius:4px;overflow:hidden;">
+              <div style="background:var(--green);height:100%;width:${pct}%;"></div>
+            </div></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : ''}
+
+    <h3 style="margin:0 0 10px;font-size:16px;">🏆 All Wins ${wins.length ? `(${wins.length})` : ''}</h3>
+    ${recentWins.length ? `<table style="width:100%;"><thead><tr>
+      <th>Student</th><th>Email</th><th>Phone</th><th>Class Date</th><th>Submitted</th><th>Course</th><th>Revenue</th>
+    </tr></thead><tbody>
+      ${recentWins.map(r => {
+        const d = r.data;
+        const days = d.submitted_at ? Math.round((Date.now() - new Date(d.submitted_at).getTime())/86400000) : '?';
+        return `<tr>
+          <td><strong>${escapeHtml(d.first_name||'')} ${escapeHtml(d.last_name||'')}</strong></td>
+          <td><a class="action-link" href="mailto:${escapeHtml(d.email)}">${escapeHtml(d.email)}</a></td>
+          <td><a class="action-link" href="tel:${escapeHtml((d.phone||'').replace(/\D/g,''))}">${escapeHtml(d.phone || '')}</a></td>
+          <td>${escapeHtml(fmtDate(d.date))}<br><span class="small">${escapeHtml(d.time_label || '')}</span></td>
+          <td><span class="small">${days}d ago</span></td>
+          <td>${courseLabel(d.course_type)}</td>
+          <td><strong style="color:var(--green);">$${priceFor(d.course_type)}</strong></td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>` : '<div class="empty">No wins yet. Come on, sell some classes 💪</div>'}
+  `;
+
+  // Hide the monthly loss section while in won view
+  const lossHost = document.getElementById('monthlyLossHost');
+  if (lossHost) lossHost.innerHTML = '';
 }
 
 // ====================================================================
