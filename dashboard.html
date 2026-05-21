@@ -889,6 +889,38 @@
     <!-- DASHBOARD TAB -->
     <div class="page active" id="page-dashboard">
       <div class="stats" id="statsRow"></div>
+
+      <!-- Team To-Do Board -->
+      <div class="card" id="teamTodoCard">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+          <h2 style="margin:0;">📋 Team To-Do Board <span class="count" id="teamTodoCount">0</span></h2>
+          <span id="teamTodoStatus" style="font-size:12px;color:var(--gray-500);"></span>
+        </div>
+        <p style="color:var(--gray-500); font-size:13px; margin-bottom:12px;">
+          Shared across the team. Add items, check them off, edit, delete. Lives in Make data store · everyone sees the same list in real time.
+        </p>
+        <form id="teamTodoForm" onsubmit="addTeamTodo(event)" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+          <input id="teamTodoInput" type="text" placeholder="e.g., Call Reimund about Heartsaver booking" required maxlength="200"
+                 style="flex:1;min-width:200px;padding:10px 12px;border:1px solid var(--gray-300);border-radius:6px;font-family:inherit;font-size:14px;">
+          <select id="teamTodoPriority" style="padding:10px 8px;border:1px solid var(--gray-300);border-radius:6px;font-family:inherit;font-size:13px;background:#fff;">
+            <option value="med">⚪ Normal</option>
+            <option value="high">🔴 High</option>
+            <option value="low">🟢 Low</option>
+          </select>
+          <input id="teamTodoAuthor" type="text" placeholder="Your name (saves)" maxlength="40"
+                 style="width:140px;padding:10px 12px;border:1px solid var(--gray-300);border-radius:6px;font-family:inherit;font-size:14px;">
+          <button type="submit" class="btn" style="background:var(--red);color:#fff;border:none;padding:0 18px;border-radius:6px;font-weight:600;cursor:pointer;">+ Add</button>
+        </form>
+        <div id="teamTodoOpenList"></div>
+        <div id="teamTodoCompletedHost" style="margin-top:18px;display:none;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <h3 style="font-size:14px;margin:0;color:var(--gray-700);">✅ Completed <span id="teamTodoCompletedCount" class="count" style="font-size:12px;">0</span></h3>
+            <button onclick="toggleCompletedView()" id="teamTodoToggleBtn" class="btn btn-sm" style="background:transparent;color:var(--gray-700);border:1px solid var(--gray-300);">Show</button>
+          </div>
+          <div id="teamTodoCompletedList" style="display:none;"></div>
+        </div>
+      </div>
+
       <div class="grid-2">
         <div>
           <div class="card">
@@ -1204,6 +1236,7 @@ const IS_HOSTED = location.hostname !== 'localhost' && location.hostname !== '12
 const CONFIG = {
   teamId: 2313459,
   dataStoreId: 100809,
+  todosDataStoreId: 101403,         // Team TODOs (separate datastore)
   apiBase: IS_HOSTED ? '/api/make' : (location.hostname === 'localhost' ? '/api' : 'https://us2.make.com/api/v2'),
   seatCapacityPerSlot: 12,
   pricePerBooking: 89,
@@ -3610,6 +3643,227 @@ function svgAvatarFor(firstName, email) {
     <path d="M26 31 Q30 33 34 31" stroke="#3a1a10" stroke-width="1.2" fill="none" stroke-linecap="round"/>
   </svg>`;
 }
+
+// ====================================================================
+// TEAM TO-DO BOARD — shared, server-stored, real-time across the team
+// Lives in Make data store 101403. CRUD via the same /api/make proxy.
+// ====================================================================
+var TEAM_TODOS = [];
+var __showCompletedTodos = false;
+
+async function loadTeamTodos() {
+  const status = document.getElementById('teamTodoStatus');
+  if (status) status.textContent = 'Syncing…';
+  try {
+    // Paginate (max 100 per page)
+    let all = [], offset = 0;
+    while (true) {
+      const d = await apiGet(`/data-stores/${CONFIG.todosDataStoreId}/data?teamId=${CONFIG.teamId}&pg%5Blimit%5D=100&pg%5Boffset%5D=${offset}`);
+      const batch = d.records || [];
+      all = all.concat(batch);
+      if (batch.length < 100) break;
+      offset += 100;
+      if (offset >= 1000) break;
+    }
+    TEAM_TODOS = all;
+    renderTeamTodos();
+    if (status) status.textContent = `Last synced ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    if (status) status.textContent = 'Sync failed: ' + e.message;
+  }
+}
+
+function renderTeamTodos() {
+  const open = TEAM_TODOS.filter(r => r.data && r.data.done !== 'yes')
+    .sort((a,b) => {
+      // Priority high → med → low, then newest first
+      const p = { high: 0, med: 1, low: 2 };
+      const pa = p[a.data.priority] ?? 1, pb = p[b.data.priority] ?? 1;
+      if (pa !== pb) return pa - pb;
+      return (b.data.created_at || '').localeCompare(a.data.created_at || '');
+    });
+  const done = TEAM_TODOS.filter(r => r.data && r.data.done === 'yes')
+    .sort((a,b) => (b.data.completed_at || '').localeCompare(a.data.completed_at || ''));
+
+  document.getElementById('teamTodoCount').textContent = open.length;
+  document.getElementById('teamTodoCompletedCount').textContent = done.length;
+  document.getElementById('teamTodoCompletedHost').style.display = done.length ? 'block' : 'none';
+
+  // Open list
+  const openHost = document.getElementById('teamTodoOpenList');
+  if (!open.length) {
+    openHost.innerHTML = '<div class="empty" style="padding:20px;">Nothing on the board. Type something above and hit Add 👆</div>';
+  } else {
+    openHost.innerHTML = open.map(r => teamTodoRowHtml(r, false)).join('');
+  }
+  // Completed list (collapsed by default)
+  document.getElementById('teamTodoCompletedList').innerHTML = done.map(r => teamTodoRowHtml(r, true)).join('');
+}
+
+function teamTodoRowHtml(r, isDone) {
+  const d = r.data || {};
+  const text = d.text || '';
+  const prio = d.priority || 'med';
+  const author = d.created_by || '';
+  const completedBy = d.completed_by || '';
+  const created = d.created_at ? new Date(d.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  const completed = d.completed_at ? new Date(d.completed_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+  const prioDot = prio === 'high' ? '🔴' : prio === 'low' ? '🟢' : '⚪';
+  return `<div style="padding:10px 14px;background:${isDone ? 'var(--green-light)' : '#fff'};border:1px solid ${isDone ? '#a9dfbf' : 'var(--gray-200)'};border-radius:8px;margin-bottom:6px;display:flex;gap:10px;align-items:flex-start;">
+    <button onclick="toggleTeamTodoDone('${escapeHtml(r.key)}', ${isDone})" title="${isDone ? 'Mark not done' : 'Mark done'}" style="background:transparent;border:2px solid ${isDone ? 'var(--green)' : 'var(--gray-300)'};color:${isDone ? 'var(--green)' : 'transparent'};width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;">${isDone ? '✓' : ''}</button>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:14px;line-height:1.5;${isDone ? 'text-decoration:line-through;color:var(--gray-500);' : 'color:var(--gray-900);'}" ondblclick="editTeamTodo('${escapeHtml(r.key)}')">${prio === 'high' && !isDone ? '🔴 ' : ''}${escapeHtml(text)}</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-top:3px;display:flex;gap:8px;flex-wrap:wrap;">
+        ${author ? `<span>by <strong>${escapeHtml(author)}</strong></span>` : ''}
+        ${created ? `<span>${escapeHtml(created)}</span>` : ''}
+        ${isDone && completedBy ? `<span>· done by <strong>${escapeHtml(completedBy)}</strong></span>` : ''}
+        ${isDone && completed ? `<span>· ${escapeHtml(completed)}</span>` : ''}
+        ${!isDone ? `<span>${prioDot}</span>` : ''}
+      </div>
+    </div>
+    <div style="display:flex;gap:4px;flex-shrink:0;">
+      ${!isDone ? `<button onclick="editTeamTodo('${escapeHtml(r.key)}')" title="Edit" style="background:transparent;border:none;cursor:pointer;font-size:14px;color:var(--gray-500);padding:4px;">✏</button>` : ''}
+      <button onclick="deleteTeamTodo('${escapeHtml(r.key)}')" title="Delete" style="background:transparent;border:none;cursor:pointer;font-size:14px;color:var(--red);padding:4px;">🗑</button>
+    </div>
+  </div>`;
+}
+
+async function addTeamTodo(e) {
+  e.preventDefault();
+  const input = document.getElementById('teamTodoInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const priority = document.getElementById('teamTodoPriority').value;
+  const authorInput = document.getElementById('teamTodoAuthor');
+  let author = authorInput.value.trim();
+  if (!author) author = localStorage.getItem('teamTodoAuthor') || '';
+  if (author) localStorage.setItem('teamTodoAuthor', author);
+
+  const key = 'todo-' + Date.now() + '-' + Math.random().toString(36).slice(2,8);
+  const data = {
+    text,
+    done: '',
+    created_at: new Date().toISOString(),
+    created_by: author || 'anonymous',
+    priority,
+  };
+  // Optimistic UI
+  TEAM_TODOS.unshift({ key, data });
+  renderTeamTodos();
+  input.value = '';
+  input.focus();
+
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.todosDataStoreId}/data/${encodeURIComponent(key)}?teamId=${CONFIG.teamId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (err) {
+    alert('Failed to save: ' + err.message);
+    // Rollback
+    TEAM_TODOS = TEAM_TODOS.filter(x => x.key !== key);
+    renderTeamTodos();
+  }
+}
+
+async function toggleTeamTodoDone(key, currentlyDone) {
+  const r = TEAM_TODOS.find(x => x.key === key);
+  if (!r) return;
+  const newDone = currentlyDone ? '' : 'yes';
+  const author = (document.getElementById('teamTodoAuthor').value.trim() || localStorage.getItem('teamTodoAuthor') || 'anonymous');
+  const newData = {
+    ...r.data,
+    done: newDone,
+    completed_at: newDone === 'yes' ? new Date().toISOString() : '',
+    completed_by: newDone === 'yes' ? author : '',
+  };
+  // Optimistic
+  r.data = newData;
+  renderTeamTodos();
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.todosDataStoreId}/data/${encodeURIComponent(key)}?teamId=${CONFIG.teamId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(newData),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (err) {
+    alert('Failed to update: ' + err.message);
+    await loadTeamTodos();  // resync from server
+  }
+}
+
+async function editTeamTodo(key) {
+  const r = TEAM_TODOS.find(x => x.key === key);
+  if (!r) return;
+  const newText = prompt('Edit task:', r.data.text);
+  if (newText === null) return;  // cancelled
+  const trimmed = newText.trim();
+  if (!trimmed) return;
+  const newData = { ...r.data, text: trimmed };
+  r.data = newData;
+  renderTeamTodos();
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.todosDataStoreId}/data/${encodeURIComponent(key)}?teamId=${CONFIG.teamId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(newData),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (err) {
+    alert('Failed to update: ' + err.message);
+    await loadTeamTodos();
+  }
+}
+
+async function deleteTeamTodo(key) {
+  const r = TEAM_TODOS.find(x => x.key === key);
+  if (!r) return;
+  if (!confirm(`Delete this task?\n\n"${r.data.text}"\n\nCannot be undone.`)) return;
+  TEAM_TODOS = TEAM_TODOS.filter(x => x.key !== key);
+  renderTeamTodos();
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.todosDataStoreId}/data/${encodeURIComponent(key)}?teamId=${CONFIG.teamId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': authHeader() },
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (err) {
+    alert('Failed to delete: ' + err.message);
+    await loadTeamTodos();
+  }
+}
+
+function toggleCompletedView() {
+  __showCompletedTodos = !__showCompletedTodos;
+  document.getElementById('teamTodoCompletedList').style.display = __showCompletedTodos ? 'block' : 'none';
+  document.getElementById('teamTodoToggleBtn').textContent = __showCompletedTodos ? 'Hide' : 'Show';
+}
+
+// Restore saved author name on page load
+window.addEventListener('load', () => {
+  const saved = localStorage.getItem('teamTodoAuthor');
+  if (saved) {
+    const el = document.getElementById('teamTodoAuthor');
+    if (el) el.value = saved;
+  }
+});
+
+// Hook into renderDashboard to load team todos
+const __origRenderDashboard = renderDashboard;
+renderDashboard = function() {
+  __origRenderDashboard();
+  loadTeamTodos();
+};
+
+// Refresh team todos every 60s (so team members see updates without manual refresh)
+setInterval(() => {
+  if (currentTab === 'dashboard' && !location.search.includes('mock=1')) {
+    loadTeamTodos();
+  }
+}, 60000);
 
 // Wrapper to fit the existing render code's `critterFor(email)` calls
 function critterFor(emailOrSeed, record) {
