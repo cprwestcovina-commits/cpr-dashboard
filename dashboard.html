@@ -1042,10 +1042,47 @@
     .panel { padding: 12px !important; }
     .cmdbar { padding: 8px 12px; gap: 10px; font-size: 12px; }
     .cmdbar .cb-search { min-width: 100%; order: 99; }
-    .calendar { grid-template-columns: repeat(7, 1fr) !important; font-size: 10px; }
-    .cal-cell { min-height: 60px !important; padding: 4px !important; }
-    .cal-num { font-size: 11px !important; }
-    .cal-booking { font-size: 9px !important; padding: 1px 3px !important; }
+    /* Calendar switches to compact list view on mobile (grid is unusable below 768px) */
+    .calendar { display: block !important; }
+    .cal-dow { display: none; }                /* hide weekday headers in list mode */
+    .cal-cell {
+      display: flex !important;
+      flex-direction: column;
+      padding: 8px 10px !important;
+      min-height: 0 !important;
+      margin-bottom: 4px;
+      border-left: 3px solid var(--gray-200);
+      border-radius: 4px;
+    }
+    .cal-cell.empty { display: none !important; }
+    .cal-cell.today { border-left-color: #C99848; }
+    .cal-num {
+      font-size: 13px !important;
+      font-weight: 700;
+      color: var(--gray-900);
+      margin-bottom: 4px;
+    }
+    .cal-num::before {
+      /* prepend the day-of-week since we hid the headers */
+      content: attr(data-dow) ' ';
+      color: var(--gray-500);
+      font-weight: 500;
+      margin-right: 4px;
+    }
+    .cal-bookings { gap: 4px !important; }
+    .cal-booking {
+      font-size: 13px !important;
+      padding: 6px 10px !important;
+      border-radius: 4px;
+      background: var(--white);
+    }
+    .cal-capbar { display: none; }
+    .cal-capbar-label { display: none; }
+    /* Empty days: collapsed entirely (don't take space) */
+    .cal-cell:not(.empty):has(.cal-bookings:empty) {
+      opacity: 0.4;
+      padding: 4px 10px !important;
+    }
     .health-footer { font-size: 10px; gap: 8px; padding: 6px 12px 60px; }
     /* Hide some columns on narrow tables */
     table .mobile-hide { display: none; }
@@ -1201,6 +1238,13 @@
             <button id="leadsViewPipeline" onclick="setLeadsView('pipeline')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🎯 Pipeline</button>
             <button id="leadsViewWon" onclick="setLeadsView('won')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🏆 Wins</button>
           </div>
+        </div>
+        <div style="display:flex;gap:6px;margin:10px 0 16px;flex-wrap:wrap;">
+          <div class="filter-chip active" data-leadsrc="all"     onclick="setLeadsSourceFilter('all')">All</div>
+          <div class="filter-chip"        data-leadsrc="paid_ad" onclick="setLeadsSourceFilter('paid_ad')">💰 Paid Ad</div>
+          <div class="filter-chip"        data-leadsrc="organic" onclick="setLeadsSourceFilter('organic')">🌱 Organic</div>
+          <div class="filter-chip"        data-leadsrc="manual"  onclick="setLeadsSourceFilter('manual')">📞 Manual</div>
+          <div class="filter-chip"        data-leadsrc="unknown" onclick="setLeadsSourceFilter('unknown')">❓ Unknown</div>
         </div>
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:16px;">
           Students who clicked Pay on the widget but haven't completed Square checkout yet. Reach out to close the sale.
@@ -1463,7 +1507,8 @@ var DASHBOARD_PW = null;
 var RECORDS = [];
 var calendarMonth = new Date();
 var studentFilter = 'all';
-var sourceFilter = 'all';
+var sourceFilter = 'all';            // Calendar tab source filter
+var leadsSourceFilter = 'all';        // Leads tab source filter (separate so they don't interfere)
 var currentTab = 'dashboard';
 
 window.addEventListener('load', () => {
@@ -1783,7 +1828,7 @@ function renderCalendarPage() {
       && (sourceFilter === 'all' || (r.data.source || 'paid_ad') === sourceFilter)
     );
     html += `<div class="cal-cell ${isToday?'today':''}">
-      <div class="cal-num">${d}</div>
+      <div class="cal-num" data-dow="${dows[(startDow + d - 1) % 7]}">${d}</div>
       <div class="cal-bookings">
         ${dayBookings.slice(0,5).map(r => {
           const ct = (r.data.course_type || '').replace(/^aha_/, '');
@@ -1805,6 +1850,20 @@ function renderCalendarPage() {
 }
 
 // === LEADS ===
+// Leads source filter setter
+function setLeadsSourceFilter(src) {
+  leadsSourceFilter = src;
+  document.querySelectorAll('[data-leadsrc]').forEach(el => {
+    el.classList.toggle('active', el.dataset.leadsrc === src);
+  });
+  renderLeads();
+}
+// Match a record against the current source filter
+function leadsSourceMatch(record) {
+  if (leadsSourceFilter === 'all') return true;
+  return sourceOf(record) === leadsSourceFilter;
+}
+
 // Source helpers — paid ad vs organic vs manual vs unknown
 const SOURCE_META = {
   paid_ad: { label: 'Paid Ad',  emoji: '💰', color: '#C0392B' },
@@ -1838,7 +1897,7 @@ function priceFor(courseType) {
 
 function renderLeads() {
   const rows = RECORDS
-    .filter(r => r.data.status === 'pending')
+    .filter(r => r.data.status === 'pending' && leadsSourceMatch(r))
     .sort((a,b) => (b.data.submitted_at || '').localeCompare(a.data.submitted_at || ''));
   document.getElementById('leadsCount').textContent = rows.length;
 
@@ -3280,7 +3339,7 @@ function setLeadsView(v) {
 function renderLeadsKanban() {
   const list = document.getElementById('leadsList');
   const rows = RECORDS
-    .filter(r => r.data.status === 'pending')
+    .filter(r => r.data.status === 'pending' && leadsSourceMatch(r))
     .sort((a,b) => (b.data.submitted_at || '').localeCompare(a.data.submitted_at || ''));
 
   // Group by stage
@@ -3366,6 +3425,7 @@ function renderLeadsWon() {
     if (d.status !== 'confirmed') return false;
     if (!d.submitted_at) return false;
     if ((d.booking_id || '').startsWith('manual-')) return false;  // manual adds aren't "wins"
+    if (!leadsSourceMatch(r)) return false;  // respect Leads tab source filter
     return true;
   });
 
