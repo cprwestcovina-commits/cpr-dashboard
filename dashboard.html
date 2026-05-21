@@ -583,148 +583,138 @@
   .kb-btn.lost { color: var(--red); }
   .kb-btn.back { color: var(--gray-500); }
 
-  /* ===== Lead Quest (retro Mario-style funnel) ===== */
+  /* ===== Lead Quest (room-based funnel, snake layout) ===== */
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
   .quest-world {
     position: relative;
-    height: 380px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    background:
-      linear-gradient(180deg, #5C94FC 0%, #5C94FC 65%, #00A800 65%, #00A800 100%);
+    background: linear-gradient(180deg, #1d2541 0%, #5C94FC 100%);
     border-left: 1px solid var(--gray-200);
     border-right: 1px solid var(--gray-200);
-    image-rendering: pixelated;
+    padding: 28px 24px;
+    overflow: visible;
   }
-  .quest-track {
+  .quest-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: auto auto;
+    gap: 36px 40px;
     position: relative;
-    height: 100%;
-    min-width: 1800px;  /* widened for 10-stage journey */
-    padding: 20px 40px 0;
   }
-  .quest-cloud {
+  /* Snake layout — row 2 is positioned right-to-left so flow snakes through */
+  .quest-room { grid-row: 1; }
+  .quest-room.row2 { grid-row: 2; }
+  .quest-room.col-1 { grid-column: 1; }
+  .quest-room.col-2 { grid-column: 2; }
+  .quest-room.col-3 { grid-column: 3; }
+  .quest-room.col-4 { grid-column: 4; }
+  .quest-room.col-5 { grid-column: 5; }
+
+  .quest-room {
+    position: relative;
+    background: linear-gradient(180deg, #87CEEB 0%, #87CEEB 50%, #00A800 50%, #00A800 100%);
+    border: 3px solid #000;
+    border-radius: 6px;
+    height: 130px;
+    box-shadow: inset 0 -4px 0 rgba(0,0,0,0.18), 3px 3px 0 #000;
+    overflow: hidden;
+  }
+  .quest-room-label {
     position: absolute;
-    top: 20px;
-    font-size: 36px;
-    opacity: 0.9;
-    animation: cloudDrift 60s linear infinite;
-  }
-  @keyframes cloudDrift {
-    from { transform: translateX(0); }
-    to   { transform: translateX(40px); }
-  }
-  .quest-stage {
-    position: absolute;
-    bottom: 100px;          /* sits on the grass line */
-    width: 100px;
-    text-align: center;
-    transform: translateX(-50%);
+    top: 0; left: 0; right: 0;
+    background: #BC7C3C;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
     font-family: 'Press Start 2P', monospace;
     font-size: 8px;
-    color: #fff;
-    line-height: 1.6;
-    text-shadow: 1px 1px 0 #000;
-  }
-  .quest-stage .stage-icon {
-    display: block;
-    width: 48px;
-    height: 48px;
-    margin: 0 auto 6px;
-    background: #BC7C3C;       /* brick brown */
-    border: 3px solid #000;
-    border-radius: 4px;
-    box-shadow: inset -3px -3px 0 rgba(0,0,0,0.25), 2px 2px 0 #000;
-    font-size: 22px;
-    line-height: 42px;
-  }
-  .quest-stage.lost .stage-icon { background: #6B6B6B; }
-  .quest-stage.won .stage-icon  { background: #F8B800; box-shadow: inset -3px -3px 0 rgba(0,0,0,0.25), 2px 2px 0 #000, 0 0 18px rgba(248,184,0,0.7); }
-  .quest-stage.waiting .stage-icon { background: #5C94FC; }   /* sky blue — calm waiting room */
-  .quest-stage.class-today .stage-icon {
-    background: #F8B800;        /* same as castle gold — today is the day! */
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { box-shadow: inset -3px -3px 0 rgba(0,0,0,0.25), 2px 2px 0 #000, 0 0 8px rgba(248,184,0,0.6); }
-    50%      { box-shadow: inset -3px -3px 0 rgba(0,0,0,0.25), 2px 2px 0 #000, 0 0 24px rgba(248,184,0,1); }
-  }
-  .quest-castle {
-    position: absolute;
-    bottom: 100px;
-    transform: translateX(-50%);
     text-align: center;
+    padding: 5px 4px;
+    border-bottom: 2px solid #000;
+    line-height: 1.2;
+    z-index: 3;
   }
-  .quest-castle .castle-icon {
-    font-size: 60px;
-    line-height: 1;
-    filter: drop-shadow(2px 2px 0 #000);
+  .quest-room.waiting .quest-room-label { background: #2E5BBF; }
+  .quest-room.class-today .quest-room-label {
+    background: #F8B800;
+    color: #000;
+    text-shadow: 1px 1px 0 #fff;
+    animation: labelPulse 1.2s ease-in-out infinite;
   }
-  .quest-castle .castle-label {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 9px;
-    color: #fff;
-    text-shadow: 1px 1px 0 #000;
-    margin-top: 4px;
+  @keyframes labelPulse {
+    0%, 100% { box-shadow: inset 0 0 0 0 rgba(248,184,0,0); }
+    50%      { box-shadow: inset 0 0 16px 2px rgba(255,220,80,0.7); }
   }
-  .quest-flag {
+  .quest-room.castle  { background: linear-gradient(180deg, #87CEEB 0%, #87CEEB 50%, #6B4423 50%, #6B4423 100%); }
+  .quest-room.castle .quest-room-label { background: #6B4423; }
+  .quest-room.final   {
+    background: linear-gradient(180deg, #FFD700 0%, #FFA500 50%, #00A800 50%, #00A800 100%);
+    box-shadow: inset 0 -4px 0 rgba(0,0,0,0.18), 3px 3px 0 #000, 0 0 22px rgba(248,184,0,0.5);
+  }
+  .quest-room.final .quest-room-label { background: #B8860B; }
+
+  /* Decorative icon in upper-right corner of each room */
+  .quest-room-icon {
     position: absolute;
-    bottom: 100px;
-    transform: translateX(-50%);
-    font-size: 40px;
-    filter: drop-shadow(2px 2px 0 #000);
+    top: 22px;
+    right: 6px;
+    font-size: 18px;
+    opacity: 0.55;
+    z-index: 1;
+    filter: drop-shadow(1px 1px 0 #000);
   }
-  .quest-sprite {
+  .quest-room.castle .quest-room-icon { font-size: 36px; opacity: 0.95; top: 18px; right: 50%; transform: translateX(50%); }
+  .quest-room.final .quest-room-icon  { font-size: 38px; opacity: 1; top: 18px; right: 50%; transform: translateX(50%); animation: trophyBob 2s ease-in-out infinite; }
+  @keyframes trophyBob {
+    0%, 100% { transform: translateX(50%) translateY(0); }
+    50%      { transform: translateX(50%) translateY(-4px); }
+  }
+
+  /* Sprite living inside a room */
+  .room-sprite {
     position: absolute;
-    bottom: 70px;
-    width: 36px;
-    height: 36px;
-    transform: translateX(-50%);
-    font-size: 28px;
-    line-height: 36px;
+    bottom: 8px;
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
     text-align: center;
     cursor: pointer;
-    transition: left 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), bottom 0.3s;
-    z-index: 5;
+    z-index: 4;
+    animation: paceRoom var(--pace-dur, 5s) linear infinite;
+    animation-delay: var(--anim-delay, 0s);
   }
-  .quest-sprite::after {
-    /* subtle ground shadow oval */
+  .room-sprite::after {
     content: '';
     position: absolute;
     left: 50%;
-    bottom: -6px;
+    bottom: -3px;
     transform: translateX(-50%);
-    width: 28px;
-    height: 6px;
-    background: rgba(0,0,0,0.25);
+    width: 22px;
+    height: 4px;
+    background: rgba(0,0,0,0.3);
     border-radius: 50%;
     filter: blur(1px);
   }
-  .sprite-body {
+  @keyframes paceRoom {
+    0%, 100% { left: 6%;  transform: scaleX(1); }
+    48%      { left: 78%; transform: scaleX(1); }
+    50%      { left: 78%; transform: scaleX(-1); }
+    98%      { left: 6%;  transform: scaleX(-1); }
+  }
+  .room-sprite .room-sprite-emoji {
     display: inline-block;
+    font-size: 24px;
     filter: drop-shadow(1px 1px 0 #000);
-    animation:
-      pace  var(--pace-dur, 4s) ease-in-out infinite,
-      bob   1.4s ease-in-out infinite;
-    animation-delay: var(--anim-delay, 0s);
-    transform-origin: center bottom;
+    animation: bobR 1.4s ease-in-out infinite;
   }
-  @keyframes pace {
-    0%, 49%   { transform: translateX(-8px) scaleX(1); }
-    50%, 99%  { transform: translateX(8px)  scaleX(-1); }
-    100%      { transform: translateX(-8px) scaleX(1); }
+  @keyframes bobR {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-2px); }
   }
-  @keyframes bob {
-    0%, 100% { margin-top: 0; }
-    50%      { margin-top: -2px; }
-  }
-  .quest-sprite:hover {
+  .room-sprite:hover {
     z-index: 10;
-  }
-  .quest-sprite:hover .sprite-body {
     animation-play-state: paused;
-    transform: scale(1.3) translateY(-4px);
   }
-  .quest-sprite .sprite-tooltip {
+  .room-sprite:hover .room-sprite-emoji { animation-play-state: paused; transform: scale(1.25); }
+  .room-sprite .room-sprite-tooltip {
     position: absolute;
     bottom: 100%;
     left: 50%;
@@ -740,31 +730,77 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.15s;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
+    z-index: 11;
   }
-  .quest-sprite:hover .sprite-tooltip { opacity: 1; }
-  .quest-stack-badge {
+  .room-sprite:hover .room-sprite-tooltip { opacity: 1; }
+  .room-stack-badge {
     position: absolute;
-    bottom: 70px;
-    transform: translateX(-50%);
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
     background: #000;
     color: #F8B800;
     font-family: 'Press Start 2P', monospace;
-    font-size: 8px;
-    padding: 4px 6px;
+    font-size: 9px;
+    padding: 5px 7px;
     border: 2px solid #fff;
-    border-radius: 2px;
-    z-index: 6;
+    border-radius: 3px;
+    z-index: 5;
+    pointer-events: none;
   }
-  .quest-empty {
+  .room-empty-hint {
     position: absolute;
-    bottom: 130px;
-    width: 100%;
+    bottom: 14px;
+    left: 0; right: 0;
     text-align: center;
     font-family: 'Press Start 2P', monospace;
-    font-size: 14px;
+    font-size: 7px;
+    color: rgba(255,255,255,0.45);
+    text-shadow: 1px 1px 0 #000;
+    pointer-events: none;
+  }
+
+  /* Connector arrows — between rooms in same row, and the vertical drop on right edge */
+  .quest-connector {
+    position: absolute;
     color: #fff;
     text-shadow: 2px 2px 0 #000;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 22px;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .quest-connector.right {
+    top: 50%;
+    right: -30px;
+    transform: translateY(-50%);
+  }
+  .quest-connector.left {
+    top: 50%;
+    left: -30px;
+    transform: translateY(-50%);
+  }
+  .quest-connector.down {
+    bottom: -36px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  /* Mobile: collapse to 2 columns */
+  @media (max-width: 768px) {
+    .quest-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px 16px;
+    }
+    .quest-room {
+      grid-column: auto !important;
+      grid-row: auto !important;
+      height: 100px;
+    }
+    .quest-room-label { font-size: 7px; padding: 4px 2px; }
+    .room-sprite { width: 24px; height: 24px; line-height: 24px; bottom: 5px; }
+    .room-sprite .room-sprite-emoji { font-size: 18px; }
+    .quest-connector { display: none; }   /* arrows look cluttered on mobile grid */
   }
 
   /* Mobile responsive */
@@ -3538,13 +3574,12 @@ function renderQuest() {
   const host = document.getElementById('questWorld');
   if (!host) return;
 
-  // Pool: all pending leads + all confirmed within last 90 days (so CERTIFIED tower stays populated)
+  // Pool: all pending leads + all confirmed within last 90 days
   const t = today();
   const last90 = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0,10); })();
   const leads = RECORDS.filter(r => {
     if (r.data.status === 'pending') return true;
     if (r.data.status === 'confirmed') {
-      // Include if class is upcoming OR happened in the last 90 days
       const cd = r.data.date || '';
       return cd >= last90;
     }
@@ -3554,101 +3589,84 @@ function renderQuest() {
   const lostLeads = RECORDS.filter(r => r.data.status === 'pending' && (r.data.lead_stage || '').toLowerCase() === 'lost');
   const wonLeads = leads.filter(r => r.data.status === 'confirmed');
   const certifiedLeads = wonLeads.filter(r => (r.data.date || '') < t);
-  const upcomingLeads  = wonLeads.filter(r => (r.data.date || '') >= t);
 
-  // Update HUD (use word labels — coin emoji renders inconsistently across systems)
+  // HUD
   document.getElementById('questCoins').innerHTML = `<span style="color:#F8B800;">💰 PAID ×${wonLeads.length}</span> &nbsp; <span style="color:#D4A017;">🏆 CERT ×${certifiedLeads.length}</span> &nbsp; <span style="color:#888;">☠ LOST ×${lostLeads.length}</span>`;
 
-  // Build the world DOM
-  let html = '<div class="quest-track">';
-
-  // Clouds — sprinkled along the top
-  const cloudPositions = [10, 28, 48, 65, 82];
-  cloudPositions.forEach((p, i) => {
-    html += `<div class="quest-cloud" style="left:${p}%;animation-delay:-${i * 7}s;">☁️</div>`;
-  });
-
-  // Stage checkpoints
-  QUEST_STAGES.forEach(s => {
-    if (s.isCastle) {
-      html += `<div class="quest-castle" style="left:${s.xPct}%;">
-        <div class="castle-icon">🏰</div>
-        <div class="castle-label">${s.label}</div>
-      </div>`;
-    } else if (s.isFinal) {
-      html += `<div class="quest-castle" style="left:${s.xPct}%;">
-        <div class="castle-icon" style="font-size:54px;filter:drop-shadow(0 0 12px #F8B800) drop-shadow(2px 2px 0 #000);">🏆</div>
-        <div class="castle-label">${s.label}</div>
-        <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-size:18px;animation:cloudDrift 3s ease-in-out infinite alternate;">✨</div>
-      </div>`;
-    } else {
-      let extraCls = '';
-      if (s.key === 'class_day') extraCls = 'class-today';
-      else if (s.key === 'waiting') extraCls = 'waiting';
-      html += `<div class="quest-stage ${extraCls}" style="left:${s.xPct}%;">
-        <div class="stage-icon">${s.icon}</div>
-        ${s.label}
-      </div>`;
-    }
-  });
-
-  // Sprites — one per lead, positioned at their current stage.
-  // Group leads by stage first so we can spread them horizontally instead of stacking up.
+  // Group leads by stage
   const byStage = {};
   leads.forEach(r => {
     const idx = questStageIndex(r);
-    if (idx < 0) return;  // lost - handled separately
+    if (idx < 0) return;
     if (!byStage[idx]) byStage[idx] = [];
     byStage[idx].push(r);
   });
 
-  const MAX_VISIBLE = 6;  // sprites shown per stage before "+N" badge appears
-  Object.entries(byStage).forEach(([idxStr, group]) => {
-    const idx = parseInt(idxStr);
-    const stage = QUEST_STAGES[idx];
+  // Render the snake-layout grid of rooms
+  // Top row (cols 1-5): stages 0-4 left-to-right
+  // Bottom row (cols 5-1): stages 5-9 right-to-left (snake/boustrophedon)
+  const roomHtml = QUEST_STAGES.map((stage, idx) => {
+    const isTopRow = idx < 5;
+    const col = isTopRow ? (idx + 1) : (10 - idx);  // 5→5, 6→4, 7→3, 8→2, 9→1
+    const row = isTopRow ? 'row1' : 'row2';
+    const group = byStage[idx] || [];
+
+    // Extra style class per stage type
+    let extraCls = '';
+    if (stage.key === 'class_day') extraCls = 'class-today';
+    else if (stage.key === 'waiting') extraCls = 'waiting';
+    else if (stage.isCastle) extraCls = 'castle';
+    else if (stage.isFinal)  extraCls = 'final';
+
+    // Connector arrow direction: top row points right (to next), end of top row points down, bottom row points left (toward next which is on its left)
+    let connector = '';
+    if (isTopRow && idx < 4)       connector = '<div class="quest-connector right">→</div>';
+    else if (idx === 4)             connector = '<div class="quest-connector down">↓</div>';
+    else if (idx >= 5 && idx < 9)   connector = '<div class="quest-connector left">←</div>';
+    // No connector after final room (idx=9)
+
+    // Sprites — pacing inside the room
+    const MAX_VISIBLE = 5;
     const visible = group.slice(0, MAX_VISIBLE);
     const hidden = group.length - visible.length;
-
-    visible.forEach((r, i) => {
+    const spriteHtml = visible.map((r, i) => {
       const critter = critterFor(r.data.email || r.key);
       const courseTxt = courseLabel(r.data.course_type).replace(/<[^>]+>/g, '');
       const days = r.data.submitted_at ? Math.round((Date.now() - new Date(r.data.submitted_at).getTime())/86400000) : '?';
-      // Spread horizontally: centered around the stage with 22px gaps
-      const center = (visible.length - 1) / 2;
-      const xOffset = (i - center) * 22;
-      const left = `calc(${stage.xPct}% + ${xOffset}px)`;
-      // Slight variance in animation timing so sprites don't sync up
-      const paceDur = 3.2 + ((i * 0.4) % 1.8);  // 3.2s – 5s
-      const animDelay = -((i * 0.7) % 4);
-      html += `<div class="quest-sprite" style="left:${left};--pace-dur:${paceDur}s;--anim-delay:${animDelay}s;" onclick="openEdit('${escapeHtml(r.key)}')">
-        <span class="sprite-body">${critter}</span>
-        <span class="sprite-tooltip">${escapeHtml((r.data.first_name||'').toUpperCase() + ' ' + (r.data.last_name||'').toUpperCase().slice(0,1))} · ${escapeHtml(courseTxt)} · ${days}D</span>
+      // Stagger animation timing so they don't sync
+      const paceDur = 4 + (i * 0.7) % 3;       // 4s – 7s
+      const animDelay = -((i * 1.3) % 5);
+      return `<div class="room-sprite" style="--pace-dur:${paceDur}s;--anim-delay:${animDelay}s;" onclick="openEdit('${escapeHtml(r.key)}')">
+        <span class="room-sprite-emoji">${critter}</span>
+        <span class="room-sprite-tooltip">${escapeHtml((r.data.first_name||'').toUpperCase() + ' ' + (r.data.last_name||'').toUpperCase().slice(0,1))} · ${escapeHtml(courseTxt)} · ${days}D</span>
       </div>`;
-    });
+    }).join('');
 
-    if (hidden > 0) {
-      const rightOffset = ((visible.length - 1) / 2) * 22 + 22;
-      const left = `calc(${stage.xPct}% + ${rightOffset}px)`;
-      html += `<div class="quest-stack-badge" style="left:${left};">+${hidden}</div>`;
-    }
-  });
+    const stackBadge = hidden > 0
+      ? `<div class="room-stack-badge">+${hidden}</div>`
+      : '';
+    const emptyHint = group.length === 0
+      ? '<div class="room-empty-hint">empty</div>'
+      : '';
 
-  // Empty-world message
-  if (leads.length === 0) {
-    html += `<div class="quest-empty">▰▰▰ NO LEADS IN PLAY ▰▰▰<br><span style="font-size:9px;display:block;margin-top:8px;">Sell some classes to spawn sprites here.</span></div>`;
-  }
+    return `<div class="quest-room ${row} col-${col} ${extraCls}">
+      <div class="quest-room-label">${stage.icon} ${stage.label}</div>
+      <div class="quest-room-icon">${stage.icon}</div>
+      ${spriteHtml}
+      ${stackBadge}
+      ${emptyHint}
+      ${connector}
+    </div>`;
+  }).join('');
 
-  // Flag at start
-  html += `<div class="quest-flag" style="left:0;bottom:100px;">🏁</div>`;
+  let html = `<div class="quest-grid">${roomHtml}</div>`;
 
-  html += '</div>';
-
-  // Lost-pit sidebar (small section below the main world)
+  // Lost-pit sidebar
   if (lostLeads.length) {
-    html += `<div style="background:#3a2920;padding:14px 20px;border-top:3px solid #000;font-family:'Press Start 2P',monospace;font-size:9px;color:#888;">
+    html += `<div style="background:#3a2920;padding:14px 20px;margin:24px -24px -28px;border-top:3px solid #000;font-family:'Press Start 2P',monospace;font-size:9px;color:#888;">
       <strong style="color:#E53935;">☠ GAME OVER PIT ×${lostLeads.length}</strong>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;align-items:center;">
-        ${lostLeads.map((r, i) => `<span class="quest-sprite-lost" onclick="openEdit('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name + ' ' + r.data.last_name)} — click to revive" style="cursor:pointer;font-size:24px;filter:grayscale(0.85) brightness(0.7);animation:bob 2.5s ease-in-out infinite;animation-delay:-${(i*0.4)%2}s;">${critterFor(r.data.email || r.key)}</span>`).join('')}
+        ${lostLeads.map((r, i) => `<span class="quest-sprite-lost" onclick="openEdit('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name + ' ' + r.data.last_name)} — click to revive" style="cursor:pointer;font-size:24px;filter:grayscale(0.85) brightness(0.7);animation:bobR 2.5s ease-in-out infinite;animation-delay:-${(i*0.4)%2}s;display:inline-block;">${critterFor(r.data.email || r.key)}</span>`).join('')}
         <span style="color:#666;margin-left:8px;">← CLICK TO REVIVE</span>
       </div>
     </div>`;
