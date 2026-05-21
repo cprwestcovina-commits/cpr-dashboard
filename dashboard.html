@@ -623,7 +623,7 @@
     display: grid;
     grid-template-columns: repeat(5, 1fr);
     grid-template-rows: auto auto;
-    gap: 36px 40px;
+    gap: 60px 50px;
     position: relative;
   }
   /* Snake layout — row 2 is positioned right-to-left so flow snakes through */
@@ -657,6 +657,57 @@
     border-bottom: 2px solid #000;
     line-height: 1.2;
     z-index: 3;
+  }
+  .quest-room-step {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    background: #FFEB3B;
+    color: #000;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #000;
+    border-radius: 50%;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 9px;
+    line-height: 18px;
+    text-align: center;
+    z-index: 5;
+    box-shadow: 2px 2px 0 #000;
+  }
+  .quest-room.castle .quest-room-step { background: #F8B800; }
+  .quest-room.final  .quest-room-step { background: #FF6F00; color: #fff; }
+
+  /* START / GOAL badges */
+  .quest-badge {
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #000;
+    color: #4CFF4C;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    padding: 5px 9px;
+    border: 2px solid #4CFF4C;
+    border-radius: 2px;
+    white-space: nowrap;
+    z-index: 6;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+  }
+  .quest-badge.goal {
+    color: #FFEB3B;
+    border-color: #FFEB3B;
+  }
+  .quest-badge::before {
+    content: '▼';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: inherit;
+    font-size: 10px;
+    text-shadow: 1px 1px 0 #000;
   }
   .quest-room.waiting .quest-room-label { background: #2E5BBF; }
   .quest-room.class-today .quest-room-label {
@@ -905,7 +956,7 @@
     display: inline-block;
     white-space: nowrap;
     padding-left: 100%;
-    animation: tickerScroll 50s linear infinite;
+    animation: tickerScroll 140s linear infinite;
   }
   .quest-ticker-inner:hover { animation-play-state: paused; }
   .quest-ticker-item {
@@ -928,25 +979,30 @@
   /* Connector arrows — between rooms in same row, and the vertical drop on right edge */
   .quest-connector {
     position: absolute;
-    color: #fff;
-    text-shadow: 2px 2px 0 #000;
+    color: #FFEB3B;
+    text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
     font-family: 'Press Start 2P', monospace;
-    font-size: 22px;
+    font-size: 30px;
     pointer-events: none;
-    z-index: 2;
+    z-index: 4;
+    animation: connectorPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes connectorPulse {
+    0%, 100% { opacity: 0.7; }
+    50%      { opacity: 1; }
   }
   .quest-connector.right {
     top: 50%;
-    right: -30px;
+    right: -34px;
     transform: translateY(-50%);
   }
   .quest-connector.left {
     top: 50%;
-    left: -30px;
+    left: -34px;
     transform: translateY(-50%);
   }
   .quest-connector.down {
-    bottom: -36px;
+    bottom: -50px;
     left: 50%;
     transform: translateX(-50%);
   }
@@ -4176,17 +4232,26 @@ function renderQuest() {
       ? '<div class="room-empty-hint">empty</div>'
       : '';
 
+    // Step number (1-10), START badge on first room, GOAL badge on last
+    const stepNum = idx + 1;
+    let badge = '';
+    if (idx === 0) badge = '<div class="quest-badge">START HERE</div>';
+    else if (stage.isFinal) badge = '<div class="quest-badge goal">GOAL!</div>';
+
     return `<div class="quest-room ${row} col-${col} ${extraCls}">
+      <div class="quest-room-step">${stepNum}</div>
       <div class="quest-room-label">${stage.icon} ${stage.label}</div>
       <div class="quest-room-icon">${stage.icon}</div>
       ${spriteHtml}
       ${stackBadge}
       ${emptyHint}
       ${connector}
+      ${badge}
     </div>`;
   }).join('');
 
-  let html = `<div class="quest-grid">${roomHtml}</div>`;
+  let html = `<div style="text-align:center;margin-bottom:18px;font-family:'Press Start 2P',monospace;font-size:11px;color:#fff;text-shadow:2px 2px 0 #000;letter-spacing:1px;">▶ FOLLOW THE NUMBERS · 1 → 10 · LEFT TO RIGHT, THEN RIGHT TO LEFT ◀</div>
+  <div class="quest-grid">${roomHtml}</div>`;
 
   // Live event ticker — recent funnel activity
   html += buildQuestTicker();
