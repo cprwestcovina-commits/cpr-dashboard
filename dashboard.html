@@ -587,11 +587,37 @@
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
   .quest-world {
     position: relative;
-    background: linear-gradient(180deg, #1d2541 0%, #5C94FC 100%);
+    background: linear-gradient(180deg, #5C94FC 0%, #87CEEB 100%);  /* default = day */
     border-left: 1px solid var(--gray-200);
     border-right: 1px solid var(--gray-200);
     padding: 28px 24px;
     overflow: visible;
+    transition: background 2s ease;
+  }
+  /* Day/night cycle backgrounds (set by JS based on current hour) */
+  .quest-world.tod-dawn    { background: linear-gradient(180deg, #FFB07A 0%, #FFD580 60%, #87CEEB 100%); }
+  .quest-world.tod-day     { background: linear-gradient(180deg, #5C94FC 0%, #87CEEB 100%); }
+  .quest-world.tod-dusk    { background: linear-gradient(180deg, #E55934 0%, #FA9F42 60%, #6B4F8A 100%); }
+  .quest-world.tod-night   { background: linear-gradient(180deg, #0d1b3d 0%, #2a3868 100%); }
+  .quest-world.tod-night::before {
+    /* twinkling stars overlay */
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      radial-gradient(2px 2px at 10% 20%, #fff, transparent),
+      radial-gradient(1px 1px at 30% 12%, #fff, transparent),
+      radial-gradient(2px 2px at 55% 30%, #fff, transparent),
+      radial-gradient(1px 1px at 75% 15%, #fff, transparent),
+      radial-gradient(2px 2px at 88% 28%, #fff, transparent),
+      radial-gradient(1px 1px at 18% 38%, #fff, transparent),
+      radial-gradient(2px 2px at 45% 22%, #fff, transparent);
+    pointer-events: none;
+    animation: twinkle 4s ease-in-out infinite;
+    z-index: 0;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
   }
   .quest-grid {
     display: grid;
@@ -762,6 +788,141 @@
     color: rgba(255,255,255,0.45);
     text-shadow: 1px 1px 0 #000;
     pointer-events: none;
+  }
+
+  /* ── Stale-lead distress glow (5+ days stuck) ── */
+  .room-sprite.stale .room-sprite-emoji {
+    filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.5)) grayscale(0.4) brightness(0.85);
+    animation: bobR 1.4s ease-in-out infinite, staleFlash 1.6s ease-in-out infinite;
+  }
+  @keyframes staleFlash {
+    0%, 100% { filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.5)) grayscale(0.4) brightness(0.85); }
+    50%      { filter: drop-shadow(0 0 8px #E53935) drop-shadow(1px 1px 0 rgba(0,0,0,0.5)) grayscale(0.4) brightness(0.85); }
+  }
+  .room-sprite.stale::before {
+    content: '!';
+    position: absolute;
+    top: -10px;
+    right: -6px;
+    background: #E53935;
+    color: #fff;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+    text-align: center;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    z-index: 6;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  /* ── Speed-runner lightning halo (paid fast) ── */
+  .room-sprite.speedrun::after {
+    content: '⚡';
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px;
+    color: #FFEB3B;
+    filter: drop-shadow(0 0 4px #FFEB3B) drop-shadow(1px 1px 0 #000);
+    animation: lightning 0.9s ease-in-out infinite;
+    z-index: 6;
+    width: auto;
+    height: auto;
+    background: none;
+    border-radius: 0;
+  }
+  @keyframes lightning {
+    0%, 100% { transform: translateX(-50%) scale(1) rotate(-8deg); opacity: 1; }
+    50%      { transform: translateX(-50%) scale(1.2) rotate(8deg); opacity: 0.7; }
+  }
+  .room-sprite.speedrun .room-sprite-emoji {
+    filter: drop-shadow(0 0 6px rgba(255,235,59,0.6)) drop-shadow(1px 1px 0 rgba(0,0,0,0.5));
+  }
+
+  /* ── Course-themed accessory (small emoji badge upper-right of sprite) ── */
+  .sprite-gear {
+    position: absolute;
+    top: -2px;
+    right: -8px;
+    font-size: 12px;
+    line-height: 1;
+    filter: drop-shadow(1px 1px 0 #000);
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* ── Pokeball click animation ── */
+  .pokeball-throw {
+    position: fixed;
+    width: 24px;
+    height: 24px;
+    z-index: 9999;
+    pointer-events: none;
+    border-radius: 50%;
+    background:
+      linear-gradient(180deg, #E53935 0%, #E53935 47%, #000 47%, #000 53%, #fff 53%, #fff 100%);
+    border: 2px solid #000;
+    box-shadow: inset -3px -3px 0 rgba(0,0,0,0.3), 0 0 8px rgba(0,0,0,0.4);
+    animation: pokeballThrow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  .pokeball-throw::after {
+    /* center button */
+    content: '';
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px; height: 6px;
+    background: #fff;
+    border: 2px solid #000;
+    border-radius: 50%;
+  }
+  @keyframes pokeballThrow {
+    0%   { transform: translate(0, -200px) rotate(0); opacity: 0; }
+    20%  { opacity: 1; }
+    70%  { transform: translate(0, 0) rotate(540deg); }
+    80%  { transform: translate(0, -10px) rotate(540deg) scale(1.2); }
+    100% { transform: translate(0, 0) rotate(540deg) scale(0); opacity: 0; }
+  }
+
+  /* ── Live event ticker ── */
+  .quest-ticker {
+    background: #000;
+    color: #4CFF4C;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    padding: 8px 0;
+    border-top: 2px solid #4CFF4C;
+    border-bottom: 2px solid #4CFF4C;
+    overflow: hidden;
+    position: relative;
+    margin: 0 -24px;
+  }
+  .quest-ticker-inner {
+    display: inline-block;
+    white-space: nowrap;
+    padding-left: 100%;
+    animation: tickerScroll 50s linear infinite;
+  }
+  .quest-ticker-inner:hover { animation-play-state: paused; }
+  .quest-ticker-item {
+    display: inline-block;
+    margin-right: 60px;
+  }
+  .quest-ticker-item .tk-tag {
+    color: #FFEB3B;
+    margin-right: 6px;
+  }
+  .quest-ticker-item .tk-time {
+    color: #888;
+    margin-left: 6px;
+  }
+  @keyframes tickerScroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-100%); }
   }
 
   /* Connector arrows — between rooms in same row, and the vertical drop on right edge */
@@ -3937,6 +4098,9 @@ function renderQuest() {
   // HUD
   document.getElementById('questCoins').innerHTML = `<span style="color:#F8B800;">💰 PAID ×${wonLeads.length}</span> &nbsp; <span style="color:#D4A017;">🏆 CERT ×${certifiedLeads.length}</span> &nbsp; <span style="color:#888;">☠ LOST ×${lostLeads.length}</span>`;
 
+  // Day/night cycle background
+  applyTimeOfDay();
+
   // Group leads by stage
   const byStage = {};
   leads.forEach(r => {
@@ -3976,13 +4140,32 @@ function renderQuest() {
     const spriteHtml = visible.map((r, i) => {
       const critter = critterFor(r.data.email || r.key, r);
       const courseTxt = courseLabel(r.data.course_type).replace(/<[^>]+>/g, '');
-      const days = r.data.submitted_at ? Math.round((Date.now() - new Date(r.data.submitted_at).getTime())/86400000) : '?';
+      const ageMs = r.data.submitted_at ? (Date.now() - new Date(r.data.submitted_at).getTime()) : 0;
+      const days = ageMs ? Math.round(ageMs/86400000) : '?';
+
+      // Status modifiers
+      let mods = [];
+      // Stale: pending lead in same room 5+ days
+      if (r.data.status === 'pending' && days !== '?' && days >= 5) mods.push('stale');
+      // Speed-runner: confirmed within last 60 minutes (fresh win)
+      if (r.data.status === 'confirmed' && ageMs > 0 && ageMs < 3600000) mods.push('speedrun');
+
+      // Course-themed accessory
+      const ct = (r.data.course_type || '').replace(/^aha_/, '').toLowerCase();
+      const gear = ct === 'pals' ? '🩺'
+                 : ct === 'acls' ? '📋'
+                 : ct === 'heartsaver' || ct === 'hs' ? '🩹'
+                 : (ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') ? '🔄'
+                 : '💓';  // BLS default
+
       // Stagger animation timing so they don't sync
-      const paceDur = 4 + (i * 0.7) % 3;       // 4s – 7s
+      const paceDur = 4 + (i * 0.7) % 3;
       const animDelay = -((i * 1.3) % 5);
-      return `<div class="room-sprite" style="--pace-dur:${paceDur}s;--anim-delay:${animDelay}s;" onclick="openEdit('${escapeHtml(r.key)}')">
+
+      return `<div class="room-sprite ${mods.join(' ')}" style="--pace-dur:${paceDur}s;--anim-delay:${animDelay}s;" onclick="questCatch(event, '${escapeHtml(r.key)}')">
         <span class="room-sprite-emoji">${critter}</span>
-        <span class="room-sprite-tooltip">${escapeHtml((r.data.first_name||'').toUpperCase() + ' ' + (r.data.last_name||'').toUpperCase().slice(0,1))} · ${escapeHtml(courseTxt)} · ${days}D</span>
+        <span class="sprite-gear">${gear}</span>
+        <span class="room-sprite-tooltip">${escapeHtml((r.data.first_name||'').toUpperCase() + ' ' + (r.data.last_name||'').toUpperCase().slice(0,1))} · ${escapeHtml(courseTxt)} · ${days}D${mods.includes('stale') ? ' · STALE' : ''}${mods.includes('speedrun') ? ' · ⚡SPEED' : ''}</span>
       </div>`;
     }).join('');
 
@@ -4004,6 +4187,9 @@ function renderQuest() {
   }).join('');
 
   let html = `<div class="quest-grid">${roomHtml}</div>`;
+
+  // Live event ticker — recent funnel activity
+  html += buildQuestTicker();
 
   // Lost-pit sidebar
   if (lostLeads.length) {
@@ -4047,6 +4233,117 @@ function renderQuest() {
       </div>
     `;
   }
+}
+
+// ============================================================
+// LEAD QUEST helpers — day/night, pokeball click, event ticker
+// ============================================================
+
+function applyTimeOfDay() {
+  const world = document.getElementById('questWorld');
+  if (!world) return;
+  const h = new Date().getHours();
+  world.classList.remove('tod-dawn','tod-day','tod-dusk','tod-night');
+  let cls = 'tod-day';
+  if (h >= 5 && h < 8)        cls = 'tod-dawn';
+  else if (h >= 8 && h < 17)  cls = 'tod-day';
+  else if (h >= 17 && h < 20) cls = 'tod-dusk';
+  else                         cls = 'tod-night';
+  world.classList.add(cls);
+}
+
+// Throw a pokeball at the clicked sprite, then open the edit modal
+function questCatch(event, key) {
+  event.preventDefault();
+  event.stopPropagation();
+  const target = event.currentTarget;
+  const rect = target.getBoundingClientRect();
+  const ball = document.createElement('div');
+  ball.className = 'pokeball-throw';
+  ball.style.left = (rect.left + rect.width/2 - 12) + 'px';
+  ball.style.top  = (rect.top + rect.height/2 - 12) + 'px';
+  document.body.appendChild(ball);
+  setTimeout(() => ball.remove(), 700);
+  // Slight delay so the user sees the catch animation before the modal opens
+  setTimeout(() => openEdit(key), 350);
+}
+
+// Build the live event ticker from RECORDS (recent activity, newest first)
+function buildQuestTicker() {
+  const events = [];
+  const t = today();
+  RECORDS.forEach(r => {
+    const d = r.data;
+    if (!d.submitted_at) return;
+    const ts = new Date(d.submitted_at).getTime();
+    const age = Date.now() - ts;
+    if (age < 0 || age > 7 * 86400000) return;  // last 7 days only
+
+    const firstName = (d.first_name || '').toUpperCase();
+    const ct = (d.course_type || '').replace(/^aha_/,'').toUpperCase();
+
+    // Event: lead spawned (always)
+    events.push({
+      time: ts,
+      tag: '▶ JOINED',
+      text: `${firstName} · ${ct}`,
+    });
+
+    // Event: paid
+    if (d.status === 'confirmed') {
+      events.push({
+        time: ts + 1,
+        tag: '💰 PAID',
+        text: `${firstName} · ${ct}`,
+      });
+      // Event: certified (class date in past)
+      if (d.date && d.date < t) {
+        events.push({
+          time: new Date(d.date + 'T18:00:00').getTime(),
+          tag: '🏆 CERTIFIED',
+          text: `${firstName} · ${ct}`,
+        });
+      }
+      // Event: class today
+      if (d.date === t) {
+        events.push({
+          time: new Date(d.date + 'T08:00:00').getTime(),
+          tag: '🎓 CLASS TODAY',
+          text: `${firstName} · ${ct}`,
+        });
+      }
+    }
+
+    // Event: marked lost
+    if (d.status === 'pending' && (d.lead_stage || '').toLowerCase() === 'lost') {
+      events.push({
+        time: ts + 2,
+        tag: '☠ LOST',
+        text: `${firstName} · ${ct}`,
+      });
+    }
+  });
+
+  events.sort((a, b) => b.time - a.time);
+  const recent = events.slice(0, 25);
+
+  if (!recent.length) {
+    return `<div class="quest-ticker"><div class="quest-ticker-inner"><span class="quest-ticker-item"><span class="tk-tag">▶ STANDBY</span>No recent funnel activity — sell some classes!</span></div></div>`;
+  }
+
+  const ago = (ms) => {
+    const s = Math.round((Date.now() - ms) / 1000);
+    if (s < 60) return `${s}s ago`;
+    if (s < 3600) return `${Math.round(s/60)}m ago`;
+    if (s < 86400) return `${Math.round(s/3600)}h ago`;
+    return `${Math.round(s/86400)}d ago`;
+  };
+
+  // Duplicate the items so the marquee loops seamlessly
+  const items = recent.map(e =>
+    `<span class="quest-ticker-item"><span class="tk-tag">${escapeHtml(e.tag)}</span>${escapeHtml(e.text)}<span class="tk-time">${escapeHtml(ago(e.time))}</span></span>`
+  ).join('');
+  return `<div class="quest-ticker"><div class="quest-ticker-inner">${items}${items}</div></div>`;
 }
 </script>
 </body>
