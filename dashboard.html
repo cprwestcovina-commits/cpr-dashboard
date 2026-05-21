@@ -701,10 +701,14 @@
   }
   .room-sprite .room-sprite-emoji {
     display: inline-block;
-    font-size: 24px;
-    filter: drop-shadow(1px 1px 0 #000);
+    width: 30px;
+    height: 30px;
+    line-height: 0;
+    vertical-align: top;
+    filter: drop-shadow(1px 1px 0 rgba(0,0,0,0.5));
     animation: bobR 1.4s ease-in-out infinite;
   }
+  .room-sprite .room-sprite-emoji svg { display: block; }
   @keyframes bobR {
     0%, 100% { transform: translateY(0); }
     50%      { transform: translateY(-2px); }
@@ -3522,13 +3526,99 @@ renderRevenue = function() {
 // Confirmed leads ("won") appear at the castle. Lost leads sit in a side pit.
 // ====================================================================
 
-// 24 critter-style emojis used as deterministic per-email avatars
-const QUEST_CRITTERS = ['🦊','🐱','🐰','🐻','🐼','🐨','🐯','🦁','🐸','🐵','🐶','🐹','🐭','🐮','🐷','🐔','🐧','🐦','🐤','🦄','🐲','🐢','🦉','🦇'];
-function critterFor(email) {
-  // Hash email → consistent critter assignment
+// ── Gender detection from first name (curated common-US-names list) ──
+// Anything not in either list → "neutral"
+const MALE_NAMES = new Set(['john','james','robert','michael','william','david','richard','joseph','thomas','charles','christopher','chris','daniel','dan','matthew','matt','anthony','tony','mark','donald','steven','steve','paul','andrew','andy','joshua','josh','kenneth','ken','kevin','brian','george','edward','ed','ronald','ron','timothy','tim','jason','jeffrey','jeff','ryan','jacob','jake','gary','nicholas','nick','eric','jonathan','jon','stephen','steve','larry','justin','scott','brandon','benjamin','ben','samuel','sam','gregory','greg','frank','alexander','alex','raymond','ray','patrick','pat','jack','dennis','jerry','tyler','aaron','henry','jose','adam','douglas','doug','nathan','nate','peter','pete','zachary','zach','kyle','walter','harold','carl','jeremy','keith','roger','gerald','ethan','arthur','terry','christian','sean','lawrence','austin','joe','noah','jesse','albert','bryan','billy','bruce','willie','jordan','dylan','alan','ralph','gabriel','roy','juan','luis','wayne','eugene','logan','randy','louis','russell','vincent','philip','bobby','johnny','bradley','brad','reimund','edson','jay','jake','jonathan','derek','tony','mike','rick','rich']);
+const FEMALE_NAMES = new Set(['mary','patricia','jennifer','jen','linda','elizabeth','liz','beth','barbara','susan','sue','jessica','jess','sarah','sara','karen','lisa','nancy','betty','sandra','margaret','meg','ashley','kimberly','kim','emily','em','donna','michelle','carol','amanda','mandy','melissa','mel','deborah','deb','stephanie','steph','rebecca','becca','laura','sharon','cynthia','cindy','kathleen','kathy','amy','shirley','angela','angie','helen','anna','brenda','pamela','pam','nicole','samantha','sam','katherine','kate','christine','emma','catherine','cathy','debra','virginia','ginny','rachel','carolyn','janet','maria','heather','diane','ruth','julie','olivia','joyce','victoria','vicki','ruby','lauren','judith','judy','christina','tina','joan','evelyn','andrea','hannah','madison','maddie','cheryl','jacqueline','martha','gloria','teresa','terri','ann','janice','jan','marie','julia','kathryn','frances','jean','alice','doris','megan','meg','diana','beverly','denise','marilyn','amber','danielle','brittany','theresa','sophia','sophie','rose','tiffany','natalie','isabella','bella','charlotte','charlie','caroline','carrie','priya','reimund','izel','karina','amanda','abraham','justin','caroline','bernardo','edson','joy','rachel','catherine','natalie','esperanza','ariadna','carolina','ashley']);
+
+function detectGender(firstName) {
+  if (!firstName) return 'neutral';
+  const n = firstName.toLowerCase().split(/\s+/)[0].replace(/[^a-z]/g, '');
+  if (MALE_NAMES.has(n)) return 'male';
+  if (FEMALE_NAMES.has(n)) return 'female';
+  // Light heuristic for unrecognized names: -a/-ia/-ie/-y endings often female
+  if (/(ia|na|la|sa|elle|ette|inne|anne)$/.test(n)) return 'female';
+  if (/(o|us|er|on|en)$/.test(n)) return 'male';
+  return 'neutral';
+}
+
+function strHash(s) {
   let h = 0;
-  for (let i = 0; i < email.length; i++) h = ((h << 5) - h + email.charCodeAt(i)) | 0;
-  return QUEST_CRITTERS[Math.abs(h) % QUEST_CRITTERS.length];
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+// Palettes
+const SKIN_TONES   = ['#FFDBAC','#F1C27D','#E0AC69','#C68642','#8D5524'];
+const HAIR_COLORS  = ['#2C1810','#6F4E37','#B7410E','#F4D03F','#9C9C9C','#000000'];
+const SHIRT_COLORS = ['#2874A6','#16A085','#C0392B','#8E44AD','#1ABC9C','#D35400','#34495E'];
+
+// Hand-drawn SVG avatar generator — 6 variants × ~210 color combos = ~1260 unique characters
+function svgAvatarFor(firstName, email) {
+  const seed   = email || firstName || 'x';
+  const h      = strHash(seed);
+  const skin   = SKIN_TONES[h % SKIN_TONES.length];
+  const hair   = HAIR_COLORS[(h >> 3) % HAIR_COLORS.length];
+  const shirt  = SHIRT_COLORS[(h >> 7) % SHIRT_COLORS.length];
+  const gender = detectGender(firstName);
+
+  // Variant within gender (3 per gender, 1 neutral)
+  const variantIdx = (h >> 11) % 3;
+  let hairSvg = '';
+  let extraSvg = '';
+
+  if (gender === 'female') {
+    // F1: long hair down, F2: ponytail, F3: short bob
+    if (variantIdx === 0) {
+      hairSvg = `<path d="M14 18 Q30 6 46 18 L48 48 Q42 38 38 38 L38 32 Q30 26 22 32 L22 38 Q18 38 12 48 Z" fill="${hair}"/>`;
+    } else if (variantIdx === 1) {
+      hairSvg = `<path d="M16 18 Q30 8 44 18 L44 26 Q30 22 16 26 Z" fill="${hair}"/>
+                 <ellipse cx="46" cy="28" rx="5" ry="8" fill="${hair}"/>`;
+    } else {
+      hairSvg = `<path d="M14 20 Q30 6 46 20 L46 34 Q42 32 38 32 L38 28 Q30 24 22 28 L22 32 Q18 32 14 34 Z" fill="${hair}"/>`;
+    }
+  } else if (gender === 'male') {
+    // M1: short hair, M2: beard, M3: messy hair
+    if (variantIdx === 0) {
+      hairSvg = `<path d="M16 20 Q30 10 44 20 L44 26 Q30 22 16 26 Z" fill="${hair}"/>`;
+    } else if (variantIdx === 1) {
+      hairSvg = `<path d="M16 20 Q30 10 44 20 L44 26 Q30 22 16 26 Z" fill="${hair}"/>
+                 <path d="M22 32 Q30 38 38 32 Q38 38 30 40 Q22 38 22 32 Z" fill="${hair}"/>`;
+    } else {
+      hairSvg = `<path d="M14 22 Q18 12 26 16 Q30 8 36 18 Q44 14 46 24 L44 26 Q30 22 16 26 Z" fill="${hair}"/>`;
+    }
+  } else {
+    // Neutral: simple medium hair
+    hairSvg = `<path d="M16 20 Q30 10 44 20 L44 28 Q30 24 16 28 Z" fill="${hair}"/>`;
+  }
+
+  // Eye style — slightly varies for character
+  const eyeY = 26;
+  return `<svg viewBox="0 0 60 50" xmlns="http://www.w3.org/2000/svg" shape-rendering="geometricPrecision" style="width:100%;height:100%;">
+    <!-- shirt -->
+    <path d="M8 50 L12 38 Q30 32 48 38 L52 50 Z" fill="${shirt}" stroke="#000" stroke-width="1.5"/>
+    <!-- neck -->
+    <rect x="26" y="32" width="8" height="6" fill="${skin}"/>
+    <!-- head -->
+    <ellipse cx="30" cy="22" rx="13" ry="14" fill="${skin}" stroke="#000" stroke-width="1.5"/>
+    <!-- hair -->
+    ${hairSvg}
+    <!-- eyes -->
+    <circle cx="25" cy="${eyeY}" r="1.4" fill="#1a1a1a"/>
+    <circle cx="35" cy="${eyeY}" r="1.4" fill="#1a1a1a"/>
+    <!-- mouth -->
+    <path d="M26 31 Q30 33 34 31" stroke="#3a1a10" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  </svg>`;
+}
+
+// Wrapper to fit the existing render code's `critterFor(email)` calls
+function critterFor(emailOrSeed, record) {
+  // Try to find a record matching this email so we can detect gender from first_name
+  if (!record) {
+    record = RECORDS.find(r => (r.data.email || '').toLowerCase() === (emailOrSeed || '').toLowerCase());
+  }
+  const firstName = record ? (record.data.first_name || '') : '';
+  return svgAvatarFor(firstName, emailOrSeed);
 }
 
 // Stages on the map — full student journey from NEW lead → CERTIFIED.
@@ -3630,7 +3720,7 @@ function renderQuest() {
     const visible = group.slice(0, MAX_VISIBLE);
     const hidden = group.length - visible.length;
     const spriteHtml = visible.map((r, i) => {
-      const critter = critterFor(r.data.email || r.key);
+      const critter = critterFor(r.data.email || r.key, r);
       const courseTxt = courseLabel(r.data.course_type).replace(/<[^>]+>/g, '');
       const days = r.data.submitted_at ? Math.round((Date.now() - new Date(r.data.submitted_at).getTime())/86400000) : '?';
       // Stagger animation timing so they don't sync
@@ -3666,7 +3756,7 @@ function renderQuest() {
     html += `<div style="background:#3a2920;padding:14px 20px;margin:24px -24px -28px;border-top:3px solid #000;font-family:'Press Start 2P',monospace;font-size:9px;color:#888;">
       <strong style="color:#E53935;">☠ GAME OVER PIT ×${lostLeads.length}</strong>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;align-items:center;">
-        ${lostLeads.map((r, i) => `<span class="quest-sprite-lost" onclick="openEdit('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name + ' ' + r.data.last_name)} — click to revive" style="cursor:pointer;font-size:24px;filter:grayscale(0.85) brightness(0.7);animation:bobR 2.5s ease-in-out infinite;animation-delay:-${(i*0.4)%2}s;display:inline-block;">${critterFor(r.data.email || r.key)}</span>`).join('')}
+        ${lostLeads.map((r, i) => `<span class="quest-sprite-lost" onclick="openEdit('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name + ' ' + r.data.last_name)} — click to revive" style="cursor:pointer;width:30px;height:30px;display:inline-block;line-height:0;filter:grayscale(0.85) brightness(0.7);animation:bobR 2.5s ease-in-out infinite;animation-delay:-${(i*0.4)%2}s;">${critterFor(r.data.email || r.key, r)}</span>`).join('')}
         <span style="color:#666;margin-left:8px;">← CLICK TO REVIVE</span>
       </div>
     </div>`;
