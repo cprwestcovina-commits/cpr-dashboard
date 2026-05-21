@@ -599,7 +599,7 @@
   .quest-track {
     position: relative;
     height: 100%;
-    min-width: 1400px;  /* enables horizontal scroll on mobile */
+    min-width: 1800px;  /* widened for 10-stage journey */
     padding: 20px 40px 0;
   }
   .quest-cloud {
@@ -639,6 +639,15 @@
   }
   .quest-stage.lost .stage-icon { background: #6B6B6B; }
   .quest-stage.won .stage-icon  { background: #F8B800; box-shadow: inset -3px -3px 0 rgba(0,0,0,0.25), 2px 2px 0 #000, 0 0 18px rgba(248,184,0,0.7); }
+  .quest-stage.waiting .stage-icon { background: #5C94FC; }   /* sky blue — calm waiting room */
+  .quest-stage.class-today .stage-icon {
+    background: #F8B800;        /* same as castle gold — today is the day! */
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: inset -3px -3px 0 rgba(0,0,0,0.25), 2px 2px 0 #000, 0 0 8px rgba(248,184,0,0.6); }
+    50%      { box-shadow: inset -3px -3px 0 rgba(0,0,0,0.25), 2px 2px 0 #000, 0 0 24px rgba(248,184,0,1); }
+  }
   .quest-castle {
     position: absolute;
     bottom: 100px;
@@ -3440,45 +3449,69 @@ function critterFor(email) {
   return QUEST_CRITTERS[Math.abs(h) % QUEST_CRITTERS.length];
 }
 
-// Stages on the map (matches LEAD_STAGES from the kanban + adds WON at the end)
+// Stages on the map — full student journey from NEW lead → CERTIFIED.
 // xPct = horizontal position percentage along the map width
 const QUEST_STAGES = [
-  { key: 'new',     label: 'NEW',     icon: '📋', xPct: 5  },
-  { key: 'called',  label: 'CALL',    icon: '📞', xPct: 18 },
-  { key: 'text1',   label: 'TEXT 1',  icon: '💬', xPct: 31 },
-  { key: 'email1',  label: 'EMAIL 1', icon: '📧', xPct: 44 },
-  { key: 'text2',   label: 'TEXT 2',  icon: '💬', xPct: 57 },
-  { key: 'email2',  label: '$30 OFF', icon: '🎁', xPct: 70 },
-  { key: 'won',     label: 'PAID',    icon: '🏰', xPct: 92, isCastle: true },
+  // ── Pre-payment funnel (left half) ──
+  { key: 'new',       label: 'NEW',       icon: '📋', xPct: 4  },
+  { key: 'called',    label: 'CALL',      icon: '📞', xPct: 13 },
+  { key: 'text1',     label: 'TEXT 1',    icon: '💬', xPct: 22 },
+  { key: 'email1',    label: 'EMAIL 1',   icon: '📧', xPct: 31 },
+  { key: 'text2',     label: 'TEXT 2',    icon: '💬', xPct: 40 },
+  { key: 'email2',    label: '$30 OFF',   icon: '🎁', xPct: 49 },
+  // ── Win marker (castle in the middle) ──
+  { key: 'won',       label: 'PAID',      icon: '🏰', xPct: 60, isCastle: true },
+  // ── Post-payment journey to certification (right half) ──
+  { key: 'waiting',   label: 'WAITING',   icon: '⏰', xPct: 72 },
+  { key: 'class_day', label: 'CLASS DAY', icon: '🎓', xPct: 84 },
+  { key: 'certified', label: 'CERTIFIED', icon: '🏆', xPct: 95, isFinal: true },
 ];
 
 function questStageIndex(record) {
-  if (record.data.status === 'confirmed') return QUEST_STAGES.length - 1;  // castle
-  const s = (record.data.lead_stage || 'new').toLowerCase();
-  if (s === 'lost') return -1;  // off-map
-  const i = QUEST_STAGES.findIndex(x => x.key === s);
-  return i < 0 ? 0 : i;
+  const status = record.data.status;
+  // CONFIRMED leads progress based on their class date vs today
+  if (status === 'confirmed') {
+    const d = record.data.date || '';
+    const t = today();
+    if (!d) return QUEST_STAGES.findIndex(s => s.key === 'won');
+    if (d > t)  return QUEST_STAGES.findIndex(s => s.key === 'waiting');    // upcoming class
+    if (d === t) return QUEST_STAGES.findIndex(s => s.key === 'class_day'); // today!
+    if (d < t)  return QUEST_STAGES.findIndex(s => s.key === 'certified');  // class already happened
+  }
+  // PENDING leads use their lead_stage field
+  if (status === 'pending') {
+    const s = (record.data.lead_stage || 'new').toLowerCase();
+    if (s === 'lost') return -1;
+    const i = QUEST_STAGES.findIndex(x => x.key === s);
+    return i < 0 ? 0 : i;
+  }
+  return -1;
 }
 
 function renderQuest() {
   const host = document.getElementById('questWorld');
   if (!host) return;
 
-  // Pool of relevant leads: pending leads + recently-paid (last 30 days) for the castle
+  // Pool: all pending leads + all confirmed within last 90 days (so CERTIFIED tower stays populated)
   const t = today();
-  const last30 = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0,10); })();
+  const last90 = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0,10); })();
   const leads = RECORDS.filter(r => {
     if (r.data.status === 'pending') return true;
-    if (r.data.status === 'confirmed' && (r.data.submitted_at || '').slice(0,10) >= last30) return true;
+    if (r.data.status === 'confirmed') {
+      // Include if class is upcoming OR happened in the last 90 days
+      const cd = r.data.date || '';
+      return cd >= last90;
+    }
     return false;
   });
 
   const lostLeads = RECORDS.filter(r => r.data.status === 'pending' && (r.data.lead_stage || '').toLowerCase() === 'lost');
   const wonLeads = leads.filter(r => r.data.status === 'confirmed');
+  const certifiedLeads = wonLeads.filter(r => (r.data.date || '') < t);
+  const upcomingLeads  = wonLeads.filter(r => (r.data.date || '') >= t);
 
-  // Update HUD: coins = won this period
-  const coins = wonLeads.length;
-  document.getElementById('questCoins').textContent = `🪙 ×${coins}  ⚠ Lost ×${lostLeads.length}`;
+  // Update HUD
+  document.getElementById('questCoins').innerHTML = `🪙 ×${wonLeads.length} &nbsp; 🏆 ×${certifiedLeads.length} &nbsp; ⚠ Lost ×${lostLeads.length}`;
 
   // Build the world DOM
   let html = '<div class="quest-track">';
@@ -3496,9 +3529,17 @@ function renderQuest() {
         <div class="castle-icon">🏰</div>
         <div class="castle-label">${s.label}</div>
       </div>`;
+    } else if (s.isFinal) {
+      html += `<div class="quest-castle" style="left:${s.xPct}%;">
+        <div class="castle-icon" style="font-size:54px;filter:drop-shadow(0 0 12px #F8B800) drop-shadow(2px 2px 0 #000);">🏆</div>
+        <div class="castle-label">${s.label}</div>
+        <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-size:18px;animation:cloudDrift 3s ease-in-out infinite alternate;">✨</div>
+      </div>`;
     } else {
-      const cls = s.key === 'email2' ? 'final' : '';
-      html += `<div class="quest-stage ${cls}" style="left:${s.xPct}%;">
+      let extraCls = '';
+      if (s.key === 'class_day') extraCls = 'class-today';
+      else if (s.key === 'waiting') extraCls = 'waiting';
+      html += `<div class="quest-stage ${extraCls}" style="left:${s.xPct}%;">
         <div class="stage-icon">${s.icon}</div>
         ${s.label}
       </div>`;
@@ -3557,16 +3598,25 @@ function renderQuest() {
     legend.innerHTML = `
       <div style="display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;">
         <div>
-          <strong style="color:var(--gray-900);">HOW TO PLAY</strong><br>
-          Each 🦊🐱🐰 is one pending lead. Stage moves happen when you advance them in the Pipeline view (Leads → 🎯 Pipeline). Pay = sprite teleports to 🏰.
+          <strong style="color:var(--gray-900);">THE JOURNEY</strong><br>
+          📋 NEW → 📞 CALL → 💬 TEXT → 📧 EMAIL → 🎁 $30 OFF → 🏰 PAID → ⏰ WAITING → 🎓 CLASS DAY → 🏆 CERTIFIED
+        </div>
+        <div>
+          <strong style="color:var(--gray-900);">AUTO-PROGRESS</strong><br>
+          Pre-payment: advance manually via Pipeline view.<br>
+          Post-payment: sprite moves automatically based on class date<br>
+          (future → ⏰, today → 🎓 pulsing, past → 🏆 trophy)
         </div>
         <div>
           <strong style="color:var(--gray-900);">CONTROLS</strong><br>
-          Click any sprite → opens that lead's edit modal so you can advance them, mark them lost, or delete.
+          Click any sprite → opens that lead's edit modal.<br>
+          Click a gray sprite in the pit → revive them.
         </div>
         <div>
           <strong style="color:var(--gray-900);">SCORING</strong><br>
-          🪙 = leads who paid in last 30 days · ☠ pit = leads marked lost
+          🪙 = total who paid (last 90 days)<br>
+          🏆 = completed class & certified<br>
+          ☠ = marked lost
         </div>
       </div>
     `;
