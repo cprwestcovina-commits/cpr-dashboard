@@ -1,247 +1,172 @@
 CPR WEST COVINA — TODO
 ======================
-Last updated: 2026-05-22
+Last updated: 2026-05-23
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LEAD CADENCE / SMS BUILD (paused — pick GHL vs Twilio first)
+LEAD CADENCE — SHIPPED THIS WEEK (GHL chosen)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] DECIDE: SMS provider — GoHighLevel OR Twilio
-       - GHL pros: all-in-one, calls + voicemail drops + CRM built-in (~$97/mo)
-       - Twilio pros: 10× cheaper for just SMS (~$5-15/mo at our volume)
-       - Recommendation: GHL if already paying for it; Twilio if SMS is all we need
+Final live cadence (4 touches over 7 days, +1 for ACLS/PALS):
+  T+0      📧 Pay-click nudge email           DONE (scenario 5124029)
+  T+15 min 📞 Owner phone call                MANUAL — habit
+  T+2 hr   📧 Follow-up email                 DONE (scenario 5130806)
+  T+24 hr  💬 Caroline SMS via GHL            DONE (scenario 5154192) ✨ NEW
+  Day 5    📧 COMEBACK30 email                DONE (scenario 5118321)
+  Day 5    💬 COMEBACK30 SMS via GHL          DONE (scenario 5154195) ✨ NEW
+  Day 7    💬 ACLS/PALS-only SMS w/ promo     DONE (scenario 5154196) ✨ NEW
+  Day 14   🤐 Auto-archive                     DONE (scenario 5131292)
 
-Target cadence for non-paying leads:
+Built but PAUSED (user decided cadence was too heavy):
+  - T+1hr SMS (scenario 5153956) — kept for future re-test if desired
+  - Day 3 email filler (scenario 5154194) — kept for future re-test
 
-  BLS / Heartsaver / Renewal ($89-98) — 5 touches over 7 days:
-    T+0      📧 Pay-click nudge email           (DONE)
-    T+15 min 📞 Owner phone call                (MANUAL — make it a habit)
-    T+2 hr   📧 2-hour follow-up email          (DONE)
-    T+24 hr  💬 Day 1 SMS — "seat still open"   (TODO)
-    Day 5    📧+💬 COMEBACK30 email + SMS       (email DONE, SMS TODO)
+[ ] BUILD: Hot lead admin SMS on Pay-click — texts Caroline with
+       customer name + phone within 30 sec so she can call while hot.
+       Industry data: live call within 15 min = 8-10× normal conversion.
 
-  ACLS / PALS ($250) — 7 touches over 14 days:
-    Above through Day 5, then add:
-    Day 7    💬 SMS — "2 seats left for {date}"          (TODO)
-    Day 10   📧 Personal email from owner (no template)  (TODO)
-    Day 14   🤐 Auto-archive                              (DONE)
+[ ] BUILD: Day 10 personal email for ACLS/PALS (no template)
+       Owner sends manually from cprwestcovina@gmail.com. No automation
+       needed; just a calendar reminder when an ACLS/PALS lead crosses Day 10.
 
-[ ] BUILD: Day 1 SMS scenario (after picking GHL or Twilio)
-[ ] BUILD: Day 5 SMS in scenario 5118321 (alongside COMEBACK30 email)
-[ ] BUILD: Day 7 SMS scenario for ACLS/PALS only
-[ ] BUILD: Day 10 personal email template + scenario for ACLS/PALS only
-[ ] BUILD: Instant "hot lead" admin SMS on pay-click — texts owner with
-       customer name + phone within 30 sec so they can call while hot
-
-[ ] BUILD (no SMS needed): Fill 2hr→5day gap with Day 1 + Day 3 emails
-       "Spots filling fast for {date}" / "Last few seats — book today"
+[ ] A2P 10DLC: confirm CPR West Covina is registered as a sub-brand
+       of JSL/JustSavingLives. Currently sending "Caroline from CPR West
+       Covina" SMS from a JSL-registered number — carriers may filter for
+       brand mismatch. If you see "delivered to GHL but never arrived"
+       patterns, this is the cause.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-GOOGLE ADS ATTRIBUTION (high-priority — $800/mo at stake)
+INSTRUCTOR ROSTER (NEW — shipped today)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[x] gclid + UTM capture on ads landing widgets (bls-booking.html,
-    bls-renewal.html) — live on GitHub Pages as of 2026-05-22.
-    Persists gclid, utm_source/medium/campaign/content/term, landing_url
-    to datastore on every booking.
-
-[ ] BUILD: Google Ads offline conversions upload scenario
-    Reads confirmed bookings with gclid from datastore, POSTs to Google
-    Ads API as offline conversions so Google can attribute which
-    keywords/campaigns actually drove paid bookings.
-    BLOCKED on: Google Ads API developer token (1-3 day approval).
-    Apply at: https://ads.google.com/aw/apicenter
-    Once token issued, scenario takes ~30 min to build + test.
-    Without this, $800/mo ad spend is flying blind on attribution.
+[x] Daily 7 AM PT roster → edsonolague@yahoo.com + SMS to +13235169650
+       Scenario 5154146. Consolidated email + SMS with all of today's
+       confirmed students (name, phone, time, course).
+[x] Daily 3 PM PT roster reminder SMS (catches morning sign-ups)
+       Scenario 5154145.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 2 — CARRYOVER (do next)
+ATTRIBUTION / SOURCE TAGGING (NEW — shipped today)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[x] #15  Thank-you email scenario → Scenario 5131291 "Post-Class Thank-You + Review Request"
-         - Schedule: daily 10 AM PT
-         - Filter: confirmed records with date = yesterday AND thankyou_sent != yes
-         - Sends Google review CTA + 30BEATS code + course-aware cross-sell
-         - Marks thankyou_sent=yes to prevent duplicate sends
-         - TODO: verify Google review link (currently https://g.page/r/CdoFw_Q9LRtcEAE/review)
+[x] Source tiers fixed: paid_ad (has gclid) / organic_landing (landing
+    page but no gclid) / organic (homepage) / manual / unknown
+[x] Widget bug fixed: source field now in webhook body, no longer wiped
+    by scenario PATCH
+[x] All 28 historical records backfilled with source values
+[x] Square actual payment amount now stored on confirmed records
+    (amount_paid_cents). Dashboard uses real amount when present.
 
-[x] #18  Stale pending cleanup → Scenario 5131292 "Stale Pending Cleanup"
-         - Schedule: daily 11 AM PT
-         - Filter: pending records with class date >14 days in the past
-         - Action: PATCH status=expired (silent, no email)
-         - Keeps record for analytics, removes from active leads view
+[ ] Verify Google Ads Auto-tagging is ON (Settings → Account settings).
+    If OFF, paid clicks land without gclid → mis-tagged as organic_landing.
 
-[ ] #4   Manual pay-click recovery button on dashboard
-         - On Leads tab, add a "🔔 Send recovery email now" button per row
-         - Wires to a new on-demand Make webhook that triggers the same
-           email as scenario 5118321 (COMEBACK30) without waiting for the
-           daily 10 AM run
+[ ] Apply for Google Ads API developer token (5 min form):
+    https://ads.google.com/aw/apicenter
+    1-3 day approval. Unblocks the offline-conversions upload scenario.
+
+[ ] BUILD: Google Ads offline conversions scenario (BLOCKED on dev token)
+    POSTs confirmed-bookings-with-gclid back to Google Ads API.
+    Without this, $800/mo ad spend has no conversion data in Google Ads.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SECURITY & HYGIENE (do this week)
+LEAD QUEST SIMULATOR (NEW — shipped today)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] Rotate Make API tokens — TWO are exposed:
-       1. 4317021d-3786-4640-8265-34e63c0aaa2e  (in PROJECT.md, in HTTP
-          module auth headers inside scenarios 5124029, 5126180, 5130806)
-       2. c1ba1baf-6e88-4ff5-9e03-82f89c282bd9  (from current chat session)
-    After rotating in Make UI, update the embedded Authorization headers
-    in scenarios 5124029, 5126180, 5130806 — they'll break otherwise.
+[x] Per-room scene backgrounds (NEW doorway, CALL phone wires, $30 OFF
+    fire embers, PAID castle wall, CLASS DAY classroom with chalkboard +
+    instructor + desks, CERTIFIED stars + grad cap, etc.)
+[x] DUNGEON OF LOST SOULS — fiery dungeon with 8 flames, 12 embers,
+    3 skulls, prowling demon, lava bubbles
+[x] Daily XP bar — fills with today's revenue toward $1000 goal
+[x] Caroline player character roaming the snake path (2 min lap)
+[x] World levels — every $10k confirmed revenue this month = next sublevel
+    ($0-9999 = 1-1, $10k = 1-2, ...up to 3-5)
+[x] Particle effects (coin burst on paid, confetti in CERTIFIED)
+[x] Combo banner + screen shake when 3+ wins in 1hr
+[x] Achievement toasts (first win, milestone sales, revenue thresholds)
+[x] Weather + parallax (clouds, rain, night stars, shooting stars)
+[x] Catch-up replay — diffs localStorage snapshot vs current state,
+    plays back every event you missed since last visit (auto-scales speed,
+    skip/faster controls). Saves snapshot on tab switch + page unload.
+
+[ ] Sound effects (optional — coin chime, victory fanfare, mute toggle)
+[ ] Boss battle for 10+ day stale leads (HP bar, click to "attack" = call)
+[ ] Lead path trails on hover (glowing line through every room visited)
+[ ] Cross-device snapshot (currently localStorage only — closing browser
+    on phone, opening on laptop = no catch-up). Would need server-side
+    snapshot storage.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DASHBOARD POLISH (NEW — shipped today)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] Students tab — Delete button per row (next to Reschedule)
+[x] Revenue calcs use actual Square payment amount (amount_paid_cents)
+    when present, fall back to sticker price for historical records
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOSTINGER (only you can do these)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[ ] Paste corrected MainBody.jsx into Hostinger Horizons
+    Fixes: BLS link (was 1OV7zGhW → now joztArXe), BLS Renewal link
+    (was wrong → now kUxFMZLD), <div class=...> typo on review stars.
+    Until pasted: homepage Pay buttons send BLS/Renewal customers to
+    wrong Square checkouts.
 
 [ ] Push Hero.jsx + MainBody.jsx to GitHub as backup
-    Currently lives only in Hostinger Horizons. One Horizons outage and
-    the homepage is gone. Copy both files into the GitHub repo as
-    /backup/Hero.jsx and /backup/MainBody.jsx.
-
-[ ] Make the cpr-dashboard GitHub repo private
-    Currently public; anyone can read your hardcoded token + datastore IDs.
-
-[ ] Delete the Vercel + GitHub Personal Access Tokens used during setup
-    Likely still active and granted broad scope.
-
-[ ] Add password rotation reminder
-    Dashboard footer already shows token age. When yours hits 60 days,
-    rotate it (Make → Profile → API → Add new token, delete old).
+    They live only on Hostinger. One outage and homepage is gone.
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OPERATIONAL IMPROVEMENTS
+SECURITY & HYGIENE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] Rename scenarios to drop "BLS" prefix
-    Now that all scenarios are course-agnostic, the names are misleading:
-       5124029 "BLS Admin - Pay Click Alert" → "Pay-click Alert"
-       5118287 "BLS Reminder - 24hr Before"  → "24hr Class Reminder"
-       5118320 "BLS Team - Today's Roster"   → "Daily Class Roster"
-       5118321 "BLS Abandoned Booking"       → "Abandoned Booking Recovery"
-       5118322 "BLS Renewal Reminder"        → "Renewal Reminder"
-       5126180 "BLS Renewal - Pay Click"     → "Renewal Pay-click (legacy widget)"
-       5126033 "BLS System - Daily Health"   → "Daily Health Check"
-    Cosmetic only — they work either way.
+[ ] Rotate Make API tokens — THREE now exposed in chat history:
+       1. 4317021d-3786-4640-8265-34e63c0aaa2e  (in PROJECT.md, embedded
+          in HTTP auth headers across 8+ scenarios)
+       2. c1ba1baf-6e88-4ff5-9e03-82f89c282bd9  (used this session)
+       3. GHL key: eyJh...GiCELQ (used in 6 scenarios incl roster)
+    Rotation requires updating each scenario's auth header.
 
-[ ] Add 3-minute delay to first customer nudge email (#9 from earlier)
-    Requires manually adding a Tools > Sleep module in scenario 5124029
-    via Make UI (the module's blueprint ID is not API-exposed).
-    Steps: open 5124029 → drag Tools > Sleep between HTTP PATCH and
-    Customer email → set delay = 180 seconds → save.
+[ ] Revoke the GitHub PAT pasted earlier in chat
+    (github_pat_11CEFLKXA0... — stored in macOS keychain now)
+    Generate a fresh fine-grained PAT, store new one in keychain.
 
-[ ] Update PROJECT.md with:
-       - New scenario 5130806 "Pay-click 2-Hour Follow-up"
-       - Customer nudge email exists in 5124029 module 20 (corrects an
-         earlier inaccuracy)
-       - HEALTHCARE10, COMEBACK30, 30BEATS promo code map
-       - nudge2_sent field added to datastore (not in original schema)
+[ ] Make cpr-dashboard GitHub repo private
+    Currently public; anyone can read hardcoded tokens + datastore IDs.
 
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MARKETING & GROWTH
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[ ] Confirm 30BEATS promo code exists in Square ($30 off, family/friend)
-    Used in #15 thank-you email above.
-
-[ ] Push past 300 / 400 Google reviews
-    Single biggest free SEO lever. The #15 thank-you email contributes
-    here — needs the review CTA to be the FIRST thing in the email.
-
-[ ] Build dedicated city landing pages (SEO)
-    Pick 3–5 top cities (West Covina, Pasadena, Arcadia, Covina,
-    Baldwin Park) — write unique content per city: drive time, local
-    hospitals, testimonials from that city's students. Don't link the
-    smaller cities (La Puente, Glendora, etc.) — leave them as pills.
-    Doorway-page risk if every city gets a near-identical page.
-
-[ ] Customer LTV by source attribution
-    Group records by email, see who books multiple courses (BLS now,
-    ACLS later, renewal in 2yr). Helps decide which ad channels are
-    worth more spend.
-
-[ ] 2-hour day-of SMS via Twilio
-    "Class today at 10 AM. Park free at 100 Barranca, suite 255-B."
-    Twilio: ~$0.0075 per SMS, trivial cost.
-
-[ ] eCard delivery email with cross-sell
-    After class, when eCard is issued, send it via email with a "What's
-    next? ACLS/PALS for ER staff" footer.
-
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DASHBOARD POLISH (lower priority)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-[ ] Strengthen dashboard auth
-    Currently the Vercel proxy gates by a single shared password (CPRWC).
-    Move to per-user logins or at minimum rotate the password periodically.
-
-[ ] Source attribution panel on Dashboard tab
-    Show paid-ad vs organic vs renewal split + per-source conversion rate.
-    Data is already tagged (`source` field in datastore); just needs UI.
-
-[ ] Revenue forecast widget
-    Sum of confirmed bookings × course price for next 7/30 days.
-
-[ ] Roster export button
-    One-click CSV/PDF of today's class roster for printing.
-
-[ ] No-show tracking
-    Add a "Mark no-show" button on past bookings. Auto-fires a "we missed
-    you, here's $20 off" email. Recovers ~15-20% of no-shows.
-
-[ ] "Did the email actually send?" indicator per booking
-    Pull last Gmail module status from Make logs, show ✓/✗ per record.
+[ ] Delete leftover Vercel + initial setup PATs
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 KNOWN ISSUES / WATCH LIST
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[ ] Verify ACLS/PALS time constraint (Sun & Tue only, 12 PM) works
-    end-to-end on production homepage. Test booking should:
-       - Only show Sun & Tue dates in the picker
-       - Auto-select 12 PM – 4 PM time
-       - Pay-click + admin alert emails should reflect course + time
-       - 2hr follow-up should fire correctly if unpaid
+[ ] Auto-cancel calendar event on record delete
+    (currently calendar events orphan when records are deleted)
 
-[ ] Heartsaver, ACLS, PALS calendar colors verified on real bookings
-    Currently only have BLS & PALS test data. Once a Heartsaver/ACLS
-    booking lands, confirm the calendar pill renders teal / purple.
+[ ] Manual pay-click recovery button per row on Leads tab
+    Fires the COMEBACK30 email immediately instead of waiting for
+    daily 10 AM scenario 5118321 run.
 
-[ ] Square webhook still single-account
-    All Square Payment Links fire the same webhook. If you ever switch to
-    Sandbox testing or add a second location, double-check the webhook
-    subscription scope.
+[ ] Verify Daily Health Check (scenario 5126033) email is arriving in
+    Gmail (not spam) each morning at 8 AM ET / 5 AM PT.
 
-[ ] Daily Health Check (scenario 5126033) email
-    Confirm you're actually receiving the 8 AM PT health report. If not,
-    check Gmail spam + verify the recipient filter.
+[ ] Renaming scenarios to drop the "BLS" prefix (cosmetic — they all
+    handle every course type now).
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-COMPLETED THIS CHAT (for reference)
+MARKETING & GROWTH (carryover)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-[x] Bug fix: PALS bookings showed as BLS in emails
-[x] Bug fix: 6+ duplicate confirmation emails on Square payment
-[x] Removed Arcadia from booking widget
-[x] Promo banner: Copy button on same line as code
-[x] ACLS/PALS Sun+Tue only at 12 PM in booking widget
-[x] Pipeline unified for all 5 courses (course_type derived from
-    booking_id prefix; switch formula handles all aliases)
-[x] Backfilled existing PALS records in datastore
-[x] Dashboard: Command bar with next-class countdown
-[x] Dashboard: Capacity heatmap on Calendar
-[x] Dashboard: Universal search (name/email/phone/booking_id)
-[x] Dashboard: Duplicate booking detector with banner
-[x] Dashboard: Inline edit for any booking
-[x] Dashboard: Health footer (Square webhook, scenarios, sync, token age)
-[x] Dashboard: Mobile responsive
-[x] Dashboard: 60s auto-refresh on all tabs
-[x] Calendar: Color-coded pills for all 5 courses
-[x] Customer nudge email added to pay-click scenario (was missing)
-[x] Customer nudge upgraded: reviews, promo urgency, reschedule, tap-to-call
-[x] Created 2-hour follow-up scenario (5130806)
-[x] PROJECT.md updated to reflect unified pipeline
+[ ] Push past 300 / 400 Google reviews — biggest free SEO lever
+[ ] Build dedicated city landing pages (West Covina, Pasadena, Arcadia,
+    Covina, Baldwin Park) for organic SEO
+[ ] eCard delivery email with cross-sell footer
