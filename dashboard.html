@@ -580,6 +580,8 @@
   .kb-btn:hover { background: var(--gray-100); border-color: var(--gray-300); }
   .kb-btn.advance { background: var(--green); color: #fff; border-color: var(--green); }
   .kb-btn.advance:hover { background: #186a3b; }
+  .kb-btn.won { background: #F8B800; color: #000; border-color: #B8860B; font-weight: 700; }
+  .kb-btn.won:hover { background: #FFC940; }
   .kb-btn.lost { color: var(--red); }
   .kb-btn.back { color: var(--gray-500); }
 
@@ -1143,6 +1145,18 @@
     <!-- DASHBOARD TAB -->
     <div class="page active" id="page-dashboard">
       <div class="stats" id="statsRow"></div>
+
+      <!-- Unmatched Square Payments (shown only when there are any) -->
+      <div class="card" id="unmatchedPaymentsCard" style="display:none;border:2px solid var(--red);background:#fff5f4;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+          <h2 style="margin:0;color:var(--red);">⚠️ Unmatched Square Payments <span class="count" id="unmatchedCount" style="background:var(--red);color:#fff;">0</span></h2>
+          <button class="btn btn-sm" onclick="checkUnmatchedPayments()" style="background:var(--red);color:#fff;border:none;">↻ Re-check</button>
+        </div>
+        <p style="color:var(--gray-700); font-size:13px; margin-bottom:14px;">
+          Square received money but no booking was auto-confirmed. Usually means the customer used a different email at Square checkout. Click the suggested match (or pick one manually) and the booking flips to confirmed + email/calendar invite goes out.
+        </p>
+        <div id="unmatchedList"></div>
+      </div>
 
       <!-- Team To-Do Board -->
       <div class="card" id="teamTodoCard">
@@ -3328,6 +3342,61 @@ function markLeadLost(key) {
 }
 function resetLeadStage(key) { setLeadStage(key, 'new'); }
 
+// Manually mark a lead as Won (paid) — flips status to confirmed and optionally fires the confirmation email
+const MANUAL_CONFIRM_HOOK_URL = 'https://hook.us2.make.com/v4uxgw7pstxpcjmg63iii2dcy837kcwj';
+async function markLeadWon(key) {
+  const r = RECORDS.find(x => x.key === key); if (!r) return;
+  const name = `${r.data.first_name} ${r.data.last_name}`;
+  const sendEmail = confirm(
+    `Mark ${name} as a WIN (paid)?\n\n` +
+    `Their record will flip to "confirmed" and they'll move to the 🏆 PAID column.\n\n` +
+    `Click OK to ALSO send them a confirmation email + Google Calendar invite.\n` +
+    `Click Cancel to skip the email/invite (mark won silently).`
+  );
+  if (sendEmail === null) return;  // user dismissed the whole thing somehow
+
+  // PATCH record to confirmed
+  const newData = { ...r.data, status: 'confirmed', lead_stage: '' };
+  r.data = newData;
+  renderLeads();
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(key)}?teamId=${CONFIG.teamId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(newData),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (e) {
+    alert('Failed to mark won: ' + e.message);
+    await loadAll();
+    return;
+  }
+
+  if (sendEmail && newData.email && newData.email.includes('@')) {
+    const to24 = (s) => {
+      const m = (s || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!m) return '10:00';
+      let h = parseInt(m[1]); const min = m[2]; const p = m[3].toUpperCase();
+      if (p === 'PM' && h !== 12) h += 12;
+      if (p === 'AM' && h === 12) h = 0;
+      return String(h).padStart(2,'0') + ':' + min;
+    };
+    try {
+      await fetch(MANUAL_CONFIRM_HOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newData,
+          time_label_24: to24(newData.time_label),
+          time_end_24: to24(newData.time_end),
+        }),
+      });
+    } catch (e) {
+      console.warn('Confirmation webhook failed (record was still marked won):', e);
+    }
+  }
+}
+
 // --- View toggle ---
 function getLeadsView() {
   return localStorage.getItem('leadsView') || 'table';
@@ -3391,6 +3460,7 @@ function kanbanCardHtml(r, stageIdx) {
       ${!isLost && stageIdx < LEAD_STAGES.length - 2
         ? `<button class="kb-btn advance" onclick="advanceLead('${escapeHtml(r.key)}')">Next →</button>`
         : ''}
+      ${!isLost ? `<button class="kb-btn won" onclick="markLeadWon('${escapeHtml(r.key)}')" title="Mark as paid/won — moves to confirmed">🏆 Won</button>` : ''}
       ${stageIdx > 0 ? `<button class="kb-btn back" onclick="retreatLead('${escapeHtml(r.key)}')">← Back</button>` : ''}
       ${!isLost ? `<button class="kb-btn lost" onclick="markLeadLost('${escapeHtml(r.key)}')">❌ Lost</button>` : `<button class="kb-btn" onclick="resetLeadStage('${escapeHtml(r.key)}')">↻ Reopen</button>`}
       <button class="kb-btn" onclick="openEdit('${escapeHtml(r.key)}')">✏ Edit</button>
@@ -4048,6 +4118,190 @@ function svgAvatarFor(firstName, email) {
 var TEAM_TODOS = [];
 var __showCompletedTodos = false;
 
+// ====================================================================
+// UNMATCHED SQUARE PAYMENTS — detect payments without a confirmed booking
+// ====================================================================
+async function checkUnmatchedPayments() {
+  const card = document.getElementById('unmatchedPaymentsCard');
+  const list = document.getElementById('unmatchedList');
+  const countEl = document.getElementById('unmatchedCount');
+  if (!card || !list) return;
+
+  // Build set of known payment IDs from confirmed records
+  const knownPayments = new Set();
+  RECORDS.forEach(r => {
+    if (r.data.status === 'confirmed' && r.data.square_payment_id) {
+      knownPayments.add(r.data.square_payment_id);
+    }
+  });
+
+  let hookLogs;
+  try {
+    const resp = await apiGet(`/hooks/2328890/logs?teamId=${CONFIG.teamId}&limit=30`);
+    hookLogs = resp.hookLogs || [];
+  } catch (e) {
+    list.innerHTML = `<div class="empty">Could not check Square webhook logs: ${escapeHtml(e.message)}</div>`;
+    card.style.display = 'block';
+    return;
+  }
+
+  // Fetch each log's payload in parallel
+  const payloads = await Promise.all(
+    hookLogs.map(h => apiGet(`/hooks/2328890/logs/${h.id}?teamId=${CONFIG.teamId}`).catch(() => null))
+  );
+
+  // Extract COMPLETED payments
+  const seenIds = new Set();
+  const unmatched = [];
+  payloads.forEach(p => {
+    if (!p || !p.hookLog) return;
+    const parsed = p.hookLog.data && p.hookLog.data.parsed;
+    if (!parsed || parsed.type !== 'payment.updated') return;
+    const payment = parsed.data && parsed.data.object && parsed.data.object.payment;
+    if (!payment || payment.status !== 'COMPLETED') return;
+    if (knownPayments.has(payment.id)) return;
+    if (seenIds.has(payment.id)) return;
+    if ((JSON.parse(localStorage.getItem('dismissedUnmatched') || '[]')).includes(payment.id)) return;
+    seenIds.add(payment.id);
+    unmatched.push({
+      id: payment.id,
+      email: payment.buyer_email_address || '',
+      firstName: (payment.billing_address && payment.billing_address.first_name) || '',
+      lastName: (payment.billing_address && payment.billing_address.last_name) || '',
+      amount: ((payment.amount_money && payment.amount_money.amount) || 0) / 100,
+      paidAt: parsed.created_at || p.hookLog.loggedAt,
+    });
+  });
+
+  countEl.textContent = unmatched.length;
+  if (unmatched.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = 'block';
+
+  // For each unmatched payment, find best matching pending record
+  const pending = RECORDS.filter(r => r.data.status === 'pending');
+  list.innerHTML = unmatched.map(u => {
+    // Score each pending record for match likelihood
+    const scored = pending.map(r => {
+      let score = 0;
+      const reasons = [];
+      if (r.data.email && r.data.email.toLowerCase() === u.email.toLowerCase()) { score += 100; reasons.push('email match'); }
+      if (r.data.first_name && u.firstName && r.data.first_name.toLowerCase() === u.firstName.toLowerCase()) { score += 30; reasons.push('first name'); }
+      if (r.data.last_name && u.lastName && r.data.last_name.toLowerCase() === u.lastName.toLowerCase()) { score += 30; reasons.push('last name'); }
+      // Time proximity (Square paid within 30 min of submission)
+      if (r.data.submitted_at && u.paidAt) {
+        const gap = Math.abs(new Date(u.paidAt).getTime() - new Date(r.data.submitted_at).getTime());
+        if (gap < 30 * 60000) { score += 20; reasons.push(`paid ${Math.round(gap/60000)}m after submit`); }
+      }
+      // Course price match
+      const price = priceFor(r.data.course_type);
+      if (Math.abs(price - u.amount) < 1) { score += 10; reasons.push(`$${price} matches`); }
+      return { r, score, reasons };
+    }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
+
+    const best = scored[0];
+    const others = scored.slice(1, 5);
+    const paidAgo = Math.round((Date.now() - new Date(u.paidAt).getTime()) / 60000);
+    const paidStr = paidAgo < 60 ? `${paidAgo}m ago` : paidAgo < 1440 ? `${Math.round(paidAgo/60)}h ago` : `${Math.round(paidAgo/1440)}d ago`;
+
+    let matchHtml;
+    if (best) {
+      const br = best.r.data;
+      matchHtml = `
+        <div style="background:#fff;border:1px solid var(--gray-200);border-radius:6px;padding:10px 12px;margin-top:8px;">
+          <div style="font-size:11px;color:var(--gray-500);margin-bottom:4px;">SUGGESTED MATCH (${best.score} pts — ${escapeHtml(best.reasons.join(', '))})</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <div>
+              <strong>${escapeHtml(br.first_name + ' ' + br.last_name)}</strong>
+              <span class="small">· ${escapeHtml(br.email)} · ${escapeHtml(fmtDate(br.date))} ${escapeHtml(br.time_label || '')}</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-sm" style="background:var(--green);color:#fff;border:none;" onclick="reconcilePayment('${escapeHtml(best.r.key)}', '${escapeHtml(u.id)}', true)">✓ Confirm + email</button>
+              <button class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-900);" onclick="reconcilePayment('${escapeHtml(best.r.key)}', '${escapeHtml(u.id)}', false)">Confirm only</button>
+            </div>
+          </div>
+          ${others.length ? `<details style="margin-top:8px;"><summary style="font-size:11px;color:var(--gray-500);cursor:pointer;">Other possible matches (${others.length})</summary>
+            ${others.map(o => `<div style="padding:6px 0;border-top:1px solid var(--gray-100);display:flex;justify-content:space-between;align-items:center;font-size:12px;">
+              <span>${escapeHtml(o.r.data.first_name + ' ' + o.r.data.last_name)} · ${escapeHtml(o.r.data.email)} · ${o.score}pts</span>
+              <button class="btn btn-sm" style="background:var(--gray-100);color:var(--gray-900);" onclick="reconcilePayment('${escapeHtml(o.r.key)}', '${escapeHtml(u.id)}', true)">Use this</button>
+            </div>`).join('')}
+          </details>` : ''}
+        </div>`;
+    } else {
+      matchHtml = `<div style="background:#fff;border:1px solid var(--gray-200);border-radius:6px;padding:10px 12px;margin-top:8px;color:var(--gray-500);font-size:12px;">No pending records to match. Use ➕ Manual Add Booking to create a record, then come back here.</div>`;
+    }
+
+    return `<div style="background:#fff;border:1px solid var(--red);border-radius:8px;padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+        <div>
+          <strong style="font-size:14px;">${escapeHtml(u.firstName + ' ' + u.lastName) || '(no name)'} · <span style="color:var(--green);">$${u.amount}</span></strong>
+          <div class="small" style="margin-top:2px;">${escapeHtml(u.email) || '(no email)'} · paid ${escapeHtml(paidStr)}</div>
+          <div class="small" style="color:var(--gray-500);">Square payment <code>${escapeHtml(u.id.slice(0, 16))}…</code></div>
+        </div>
+        <button class="btn btn-sm" style="background:transparent;color:var(--gray-500);border:1px solid var(--gray-300);" onclick="dismissUnmatched('${escapeHtml(u.id)}')">Ignore</button>
+      </div>
+      ${matchHtml}
+    </div>`;
+  }).join('');
+}
+
+// User dismisses an unmatched payment (e.g., it's a test payment they made themselves)
+function dismissUnmatched(paymentId) {
+  if (!confirm('Hide this payment from the unmatched list?\n\nThis only dismisses it in your browser — it stays unmatched in Make.')) return;
+  const dismissed = JSON.parse(localStorage.getItem('dismissedUnmatched') || '[]');
+  if (!dismissed.includes(paymentId)) dismissed.push(paymentId);
+  localStorage.setItem('dismissedUnmatched', JSON.stringify(dismissed));
+  checkUnmatchedPayments();
+}
+
+// Reconcile: link the Square payment to the chosen pending record
+async function reconcilePayment(recordKey, paymentId, sendEmail) {
+  const r = RECORDS.find(x => x.key === recordKey);
+  if (!r) { alert('Record not found'); return; }
+  const newData = { ...r.data, status: 'confirmed', square_payment_id: paymentId };
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(recordKey)}?teamId=${CONFIG.teamId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(newData),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    r.data = newData;
+  } catch (e) {
+    alert('Failed to update record: ' + e.message);
+    return;
+  }
+
+  if (sendEmail && newData.email && newData.email.includes('@')) {
+    const to24 = (s) => {
+      const m = (s || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!m) return '10:00';
+      let h = parseInt(m[1]); const min = m[2]; const p = m[3].toUpperCase();
+      if (p === 'PM' && h !== 12) h += 12;
+      if (p === 'AM' && h === 12) h = 0;
+      return String(h).padStart(2,'0') + ':' + min;
+    };
+    try {
+      await fetch('https://hook.us2.make.com/v4uxgw7pstxpcjmg63iii2dcy837kcwj', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newData,
+          time_label_24: to24(newData.time_label),
+          time_end_24: to24(newData.time_end),
+        }),
+      });
+    } catch (e) {
+      console.warn('Confirmation webhook failed:', e);
+    }
+  }
+  // Refresh
+  await checkUnmatchedPayments();
+  render();
+}
+
 async function loadTeamTodos() {
   const status = document.getElementById('teamTodoStatus');
   if (status) status.textContent = 'Syncing…';
@@ -4248,11 +4502,15 @@ window.addEventListener('load', () => {
   }
 });
 
-// Hook into renderDashboard to load team todos
+// Hook into renderDashboard to load team todos + check unmatched payments
 const __origRenderDashboard = renderDashboard;
 renderDashboard = function() {
   __origRenderDashboard();
   loadTeamTodos();
+  // Run unmatched-payments check on every dashboard render (cheap — uses cached RECORDS + 1 API call)
+  if (!location.search.includes('mock=1')) {
+    checkUnmatchedPayments().catch(e => console.warn('unmatched check failed:', e));
+  }
 };
 
 // Refresh team todos every 60s (so team members see updates without manual refresh)
