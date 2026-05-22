@@ -47,10 +47,6 @@ GOOGLE ADS ATTRIBUTION (high-priority — $800/mo at stake)
     Persists gclid, utm_source/medium/campaign/content/term, landing_url
     to datastore on every booking.
 
-[ ] gclid + UTM capture on homepage MainBody.jsx
-    Code is ready; must be pasted into Hostinger Horizons manually.
-    Until done, organic homepage bookings have no ad attribution.
-
 [ ] BUILD: Google Ads offline conversions upload scenario
     Reads confirmed bookings with gclid from datastore, POSTs to Google
     Ads API as offline conversions so Google can attribute which
