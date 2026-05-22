@@ -1791,6 +1791,17 @@ function showDashboard() {
 }
 
 function switchTab(tab) {
+  const prevTab = currentTab;
+  // Leaving Quest → snapshot current state so we can replay diffs on return
+  if (prevTab === 'quest' && tab !== 'quest' && typeof buildSnapshot === 'function') {
+    try {
+      const leads = (typeof RECORDS !== 'undefined') ? RECORDS.filter(r => r.data.status === 'pending' || r.data.status === 'confirmed') : [];
+      saveQuestSnapshot(buildSnapshot(leads));
+    } catch (e) {}
+  }
+  // Returning to Quest → allow catch-up to run again
+  if (tab === 'quest') window.__questCatchupDone = false;
+
   currentTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + tab));
@@ -1799,6 +1810,16 @@ function switchTab(tab) {
   // Re-render the active page in case data changed
   render();
 }
+
+// Also snapshot when the window unloads, so closing the tab/browser still saves
+window.addEventListener('beforeunload', () => {
+  if (currentTab === 'quest' && typeof buildSnapshot === 'function') {
+    try {
+      const leads = (typeof RECORDS !== 'undefined') ? RECORDS.filter(r => r.data.status === 'pending' || r.data.status === 'confirmed') : [];
+      saveQuestSnapshot(buildSnapshot(leads));
+    } catch (e) {}
+  }
+});
 
 function authHeader() {
   return IS_HOSTED ? 'Bearer ' + (DASHBOARD_PW || '') : 'Token ' + (MAKE_TOKEN || '');
