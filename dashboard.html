@@ -4173,16 +4173,80 @@ async function checkUnmatchedPayments() {
     });
   });
 
-  countEl.textContent = unmatched.length;
-  if (unmatched.length === 0) {
+  // ── Auto-confirm pass — score each unmatched payment, auto-reconcile if ≥130 pts ──
+  const AUTO_THRESHOLD = 130;
+  const pending = RECORDS.filter(r => r.data.status === 'pending');
+  const scoreFor = (u, r) => {
+    let score = 0;
+    if (r.data.email && r.data.email.toLowerCase() === u.email.toLowerCase()) score += 100;
+    if (r.data.first_name && u.firstName && r.data.first_name.toLowerCase() === u.firstName.toLowerCase()) score += 30;
+    if (r.data.last_name && u.lastName && r.data.last_name.toLowerCase() === u.lastName.toLowerCase()) score += 30;
+    if (r.data.submitted_at && u.paidAt) {
+      const gap = Math.abs(new Date(u.paidAt).getTime() - new Date(r.data.submitted_at).getTime());
+      if (gap < 30 * 60000) score += 20;
+    }
+    if (Math.abs(priceFor(r.data.course_type) - u.amount) < 1) score += 10;
+    return score;
+  };
+
+  const autoConfirmed = [];
+  const remaining = [];
+  for (const u of unmatched) {
+    const scored = pending.map(r => ({ r, score: scoreFor(u, r) })).filter(s => s.score > 0).sort((a,b) => b.score - a.score);
+    if (scored[0] && scored[0].score >= AUTO_THRESHOLD) {
+      // Auto-reconcile silently (with email)
+      try {
+        await reconcilePaymentSilent(scored[0].r.key, u.id, true);
+        autoConfirmed.push({ u, r: scored[0].r, score: scored[0].score });
+        // Remove from pending so next iteration doesn't double-match
+        const idx = pending.findIndex(p => p.key === scored[0].r.key);
+        if (idx >= 0) pending.splice(idx, 1);
+      } catch (e) {
+        console.warn('auto-confirm failed for', u.id, e);
+        remaining.push(u);
+      }
+    } else {
+      remaining.push(u);
+    }
+  }
+
+  countEl.textContent = remaining.length;
+  if (remaining.length === 0 && autoConfirmed.length === 0) {
     card.style.display = 'none';
     return;
   }
-  card.style.display = 'block';
+  if (remaining.length === 0 && autoConfirmed.length > 0) {
+    // Show a brief auto-confirm banner, then auto-hide after 8 sec
+    card.style.display = 'block';
+    card.style.borderColor = 'var(--green)';
+    card.style.background = '#eafaf1';
+    list.innerHTML = `<div style="text-align:center;padding:12px;">
+      <strong style="color:var(--green);">✨ Auto-confirmed ${autoConfirmed.length} payment${autoConfirmed.length === 1 ? '' : 's'}</strong>
+      <div style="font-size:12px;color:var(--gray-700);margin-top:6px;">
+        ${autoConfirmed.map(a => `${escapeHtml(a.r.data.first_name)} ${escapeHtml(a.r.data.last_name)} (${a.score} pts)`).join(' · ')}
+      </div>
+    </div>`;
+    document.querySelector('#unmatchedPaymentsCard h2').textContent = '✨ Auto-Confirmed';
+    setTimeout(() => {
+      card.style.display = 'none';
+      card.style.borderColor = 'var(--red)';
+      card.style.background = '#fff5f4';
+      document.querySelector('#unmatchedPaymentsCard h2').innerHTML = '⚠️ Unmatched Square Payments <span class="count" id="unmatchedCount" style="background:var(--red);color:#fff;">0</span>';
+    }, 8000);
+    return;
+  }
 
-  // For each unmatched payment, find best matching pending record
-  const pending = RECORDS.filter(r => r.data.status === 'pending');
-  list.innerHTML = unmatched.map(u => {
+  card.style.display = 'block';
+  card.style.borderColor = 'var(--red)';
+  card.style.background = '#fff5f4';
+
+  // Render auto-confirmed summary at top + remaining unmatched below
+  const autoBanner = autoConfirmed.length ? `<div style="background:var(--green-light);border:1px solid var(--green);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;">
+    <strong style="color:var(--green);">✨ Auto-confirmed ${autoConfirmed.length} this cycle:</strong>
+    <span style="color:var(--gray-700);">${autoConfirmed.map(a => `${escapeHtml(a.r.data.first_name)} ${escapeHtml(a.r.data.last_name)} (${a.score} pts)`).join(' · ')}</span>
+  </div>` : '';
+
+  list.innerHTML = autoBanner + remaining.map(u => {
     // Score each pending record for match likelihood
     const scored = pending.map(r => {
       let score = 0;
@@ -4254,6 +4318,40 @@ function dismissUnmatched(paymentId) {
   if (!dismissed.includes(paymentId)) dismissed.push(paymentId);
   localStorage.setItem('dismissedUnmatched', JSON.stringify(dismissed));
   checkUnmatchedPayments();
+}
+
+// Silent reconcile used by auto-confirm — does NOT re-check unmatched at the end (would recurse)
+async function reconcilePaymentSilent(recordKey, paymentId, sendEmail) {
+  const r = RECORDS.find(x => x.key === recordKey);
+  if (!r) throw new Error('Record not found');
+  const newData = { ...r.data, status: 'confirmed', square_payment_id: paymentId };
+  const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(recordKey)}?teamId=${CONFIG.teamId}`, {
+    method: 'PATCH',
+    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(newData),
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  r.data = newData;
+
+  if (sendEmail && newData.email && newData.email.includes('@')) {
+    const to24 = (s) => {
+      const m = (s || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!m) return '10:00';
+      let h = parseInt(m[1]); const min = m[2]; const p = m[3].toUpperCase();
+      if (p === 'PM' && h !== 12) h += 12;
+      if (p === 'AM' && h === 12) h = 0;
+      return String(h).padStart(2,'0') + ':' + min;
+    };
+    await fetch('https://hook.us2.make.com/v4uxgw7pstxpcjmg63iii2dcy837kcwj', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...newData,
+        time_label_24: to24(newData.time_label),
+        time_end_24: to24(newData.time_end),
+      }),
+    }).catch(() => {});
+  }
 }
 
 // Reconcile: link the Square payment to the chosen pending record
