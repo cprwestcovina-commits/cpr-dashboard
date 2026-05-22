@@ -2249,7 +2249,10 @@ function renderStudents() {
         <td>${escapeHtml(fmtDate(r.data.date))}<br><span class="small">${escapeHtml(r.data.time_label || '')}</span></td>
         <td>${statusPill(r.data.status)}</td>
         <td>${courseLabel(r.data.course_type)}</td>
-        <td><button class="btn" style="padding:4px 10px;font-size:12px;" onclick="openReschedule('${escapeHtml(r.key)}')">Reschedule</button></td>
+        <td style="white-space:nowrap;">
+          <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="openReschedule('${escapeHtml(r.key)}')">Reschedule</button>
+          <button class="btn" style="padding:4px 10px;font-size:12px;background:#fef2f2;color:#b91c1c;border-color:#fecaca;" onclick="actionDelete('${escapeHtml(r.key)}')" title="Permanently delete">🗑 Delete</button>
+        </td>
       </tr>`).join('') + `</tbody></table>`
     : '<div class="empty">No students match.</div>';
 }
