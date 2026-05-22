@@ -1722,10 +1722,10 @@ function renderDashboard() {
   const t = today();
   const monthStart = t.slice(0,7) + '-01';
   const confirmedThisMonth = RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date >= monthStart && r.data.date <= t.slice(0,7) + '-31');
-  const confirmedRevenueThisMonth = confirmedThisMonth.reduce((s, r) => s + priceFor(r.data.course_type), 0);
+  const confirmedRevenueThisMonth = confirmedThisMonth.reduce((s, r) => s + amountFor(r), 0);
   const pending = RECORDS.filter(r => r.data.status === 'pending');
   const todayCount = RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date === t).length;
-  const pendingRevenue = pending.reduce((s, r) => s + priceFor(r.data.course_type), 0);
+  const pendingRevenue = pending.reduce((s, r) => s + amountFor(r), 0);
   const stats = [
     { label: 'Today', val: todayCount, sub: 'confirmed classes' },
     { label: 'This Month', val: confirmedThisMonth.length, sub: 'paid bookings', cls: 'green' },
@@ -1921,6 +1921,14 @@ function priceFor(courseType) {
   return COURSE_PRICE[ct] || 89;
 }
 
+// Returns ACTUAL paid amount from Square if available (post-promo, post-fees),
+// otherwise falls back to sticker price. Used for revenue calculations.
+function amountFor(r) {
+  const cents = parseInt(r?.data?.amount_paid_cents, 10);
+  if (Number.isFinite(cents) && cents > 0) return cents / 100;
+  return priceFor(r?.data?.course_type);
+}
+
 function renderLeads() {
   const rows = RECORDS
     .filter(r => r.data.status === 'pending' && leadsSourceMatch(r))
@@ -1932,7 +1940,7 @@ function renderLeads() {
   let recoverable = 0, atRisk = 0, lost = 0;
   const breakdown = {};
   rows.forEach(r => {
-    const price = priceFor(r.data.course_type);
+    const price = amountFor(r);
     const age = r.data.submitted_at ? (now - new Date(r.data.submitted_at).getTime()) / 86400000 : 999;
     if (age < 2)        recoverable += price;
     else if (age < 14)  atRisk += price;
@@ -2005,7 +2013,7 @@ function renderSourceBreakdown() {
     const s = sourceOf(r);
     if (!stats[s]) return;
     stats[s].total++;
-    const price = priceFor(r.data.course_type);
+    const price = amountFor(r);
     const status = r.data.status;
     if (status === 'pending') {
       stats[s].pending++;
@@ -2088,7 +2096,7 @@ function renderMonthlyLeadLoss() {
     const ym = r.data.submitted_at.slice(0, 7);  // YYYY-MM
     if (!buckets[ym]) buckets[ym] = { count: 0, revenue: 0, pending: 0, cancelled: 0 };
     buckets[ym].count++;
-    buckets[ym].revenue += priceFor(r.data.course_type);
+    buckets[ym].revenue += amountFor(r);
     if (r.data.status === 'cancelled') buckets[ym].cancelled++;
     else buckets[ym].pending++;
   });
@@ -2140,7 +2148,7 @@ function renderRevenue() {
   const totalLeads = RECORDS.length;
   const conversionRate = totalLeads ? Math.round(100 * ytdConfirmed.length / totalLeads) : 0;
 
-  const sumRev = list => list.reduce((s, r) => s + priceFor(r.data.course_type), 0);
+  const sumRev = list => list.reduce((s, r) => s + amountFor(r), 0);
   const stats = [
     { label: 'This Month', val: '$' + sumRev(thisMonth).toLocaleString(), sub: thisMonth.length + ' bookings', cls: 'green' },
     { label: 'Last Month', val: '$' + sumRev(lastMonth).toLocaleString(), sub: lastMonth.length + ' bookings' },
@@ -3533,7 +3541,7 @@ function renderLeadsWon() {
     ? Math.round(100 * thisMonthWins.length / totalLeadsThisMonth.length)
     : 0;
 
-  const sumRev = list => list.reduce((s, r) => s + priceFor(r.data.course_type), 0);
+  const sumRev = list => list.reduce((s, r) => s + amountFor(r), 0);
   const thisMonthRev = sumRev(thisMonthWins);
   const lastMonthRev = sumRev(lastMonthWins);
   const allTimeRev = sumRev(wins);
@@ -3578,7 +3586,7 @@ function renderLeadsWon() {
     if (!ym) return;
     if (!byMonth[ym]) byMonth[ym] = { count: 0, revenue: 0 };
     byMonth[ym].count++;
-    byMonth[ym].revenue += priceFor(r.data.course_type);
+    byMonth[ym].revenue += amountFor(r);
   });
   const months = Object.keys(byMonth).sort().reverse();
   const peakRev = Math.max(1, ...Object.values(byMonth).map(b => b.revenue));
@@ -4185,7 +4193,7 @@ async function checkUnmatchedPayments() {
       const gap = Math.abs(new Date(u.paidAt).getTime() - new Date(r.data.submitted_at).getTime());
       if (gap < 30 * 60000) score += 20;
     }
-    if (Math.abs(priceFor(r.data.course_type) - u.amount) < 1) score += 10;
+    if (Math.abs(amountFor(r) - u.amount) < 1) score += 10;
     return score;
   };
 
@@ -4260,7 +4268,7 @@ async function checkUnmatchedPayments() {
         if (gap < 30 * 60000) { score += 20; reasons.push(`paid ${Math.round(gap/60000)}m after submit`); }
       }
       // Course price match
-      const price = priceFor(r.data.course_type);
+      const price = amountFor(r);
       if (Math.abs(price - u.amount) < 1) { score += 10; reasons.push(`$${price} matches`); }
       return { r, score, reasons };
     }).filter(s => s.score > 0).sort((a, b) => b.score - a.score);
