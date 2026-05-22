@@ -1123,6 +1123,67 @@
   .room-sprite.stale .sleep-z { position:absolute; top:-8px; right:-4px; font-size:10px; color:#fff; animation: questSleepZ 2.5s ease-out infinite; }
   @keyframes questSleepZ { 0%{transform:translate(0,0); opacity:0} 30%{opacity:1} 100%{transform:translate(18px,-22px); opacity:0} }
 
+  /* === Per-room scene backgrounds === */
+  /* Each room gets a backdrop hinting at the activity inside */
+  .room-scene { position:absolute; inset:0; pointer-events:none; opacity:0.85; z-index:0; overflow:hidden; border-radius:inherit; }
+  .room-scene .scene-bg { position:absolute; inset:0; }
+  .room-scene .scene-prop { position:absolute; }
+
+  /* NEW: doorway with question mark */
+  .scene-new { background:linear-gradient(180deg, #2a3a5a 0%, #1a2540 100%); }
+  .scene-new::before { content:'?'; position:absolute; bottom:14px; left:50%; transform:translateX(-50%); font-size:36px; color:#FFD700; font-family:'Press Start 2P',monospace; opacity:0.25; text-shadow:0 0 10px #FFD700; }
+
+  /* CALL: telephone wire across the back */
+  .scene-call { background:linear-gradient(180deg, #4a3a2a 0%, #2a1f15 100%); }
+  .scene-call::before { content:''; position:absolute; top:30%; left:0; right:0; height:2px; background:#888; opacity:0.4; }
+
+  /* TEXT: chat bubbles backdrop */
+  .scene-text { background:linear-gradient(180deg, #2a4a5a 0%, #15303f 100%); }
+
+  /* EMAIL: envelope pattern */
+  .scene-email { background:linear-gradient(180deg, #3a4a5a 0%, #1f2a3a 100%); }
+  .scene-email::before { content:'✉'; position:absolute; bottom:10px; right:10px; font-size:28px; opacity:0.2; }
+  .scene-email::after { content:'✉'; position:absolute; top:14px; left:12px; font-size:22px; opacity:0.15; }
+
+  /* $30 OFF: discount tag wall */
+  .scene-promo { background:linear-gradient(180deg, #5a3a2a 0%, #3a1f15 100%); }
+  .scene-promo::before { content:'-$30'; position:absolute; top:30%; right:14px; font-family:'Press Start 2P',monospace; font-size:10px; color:#FFD700; opacity:0.4; transform:rotate(-12deg); }
+
+  /* PAID/Castle: stone wall + flag */
+  .scene-paid { background:linear-gradient(180deg, #6a5a4a 0%, #3a2f25 100%); }
+  .scene-paid::before { content:'⚑'; position:absolute; top:8px; left:50%; transform:translateX(-50%); font-size:24px; color:#FFD700; opacity:0.6; }
+
+  /* WAITING: clock + bench */
+  .scene-waiting { background:linear-gradient(180deg, #3a4a3a 0%, #1f2f1f 100%); }
+  .scene-waiting::before { content:'🕒'; position:absolute; top:8px; right:10px; font-size:24px; opacity:0.4; }
+
+  /* CLASS DAY: full classroom scene with chalkboard + desks + instructor */
+  .scene-classday { background:linear-gradient(180deg, #d4b896 0%, #8b6f4e 100%); }
+  .scene-classday .chalkboard { position:absolute; top:6px; left:50%; transform:translateX(-50%); width:75%; height:30%; background:linear-gradient(180deg,#1a3a1f,#0a2510); border:3px solid #6b4423; border-radius:3px; box-shadow:inset 0 0 10px rgba(0,0,0,0.6); }
+  .scene-classday .chalkboard::after { content:'CPR · BLS · TODAY'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Press Start 2P',monospace; font-size:7px; color:#fff; text-shadow:0 0 4px rgba(255,255,255,0.4); letter-spacing:1px; }
+  .scene-classday .instructor { position:absolute; bottom:18%; left:50%; transform:translateX(-50%); font-size:18px; animation:questBobR 2s ease-in-out infinite; }
+  .scene-classday .desk { position:absolute; width:14px; height:6px; background:#6b4423; border-radius:1px; box-shadow:0 1px 0 #4a2f15; }
+
+  /* CERTIFIED: starry trophy hall */
+  .scene-certified { background:linear-gradient(180deg, #5a4a8a 0%, #2a1f5a 100%); }
+  .scene-certified::before { content:'★ ★ ★ ★ ★'; position:absolute; top:14px; left:0; right:0; text-align:center; color:#FFD700; font-size:10px; letter-spacing:6px; opacity:0.7; }
+
+  /* === Fiery dungeon for lost leads === */
+  .quest-dungeon { position:relative; background:radial-gradient(ellipse at bottom, #5a1a0a 0%, #2a0a05 60%, #100503 100%); padding:24px 24px 30px; margin:24px -24px -28px; border-top:4px solid #000; box-shadow:inset 0 8px 30px rgba(0,0,0,0.8); overflow:hidden; min-height:120px; }
+  .quest-dungeon::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(90deg, transparent 0 30px, rgba(0,0,0,0.3) 30px 32px); pointer-events:none; }
+  .quest-dungeon-title { position:relative; font-family:'Press Start 2P',monospace; font-size:11px; color:#FF4400; text-shadow:0 0 8px #FF4400, 2px 2px 0 #000; letter-spacing:2px; z-index:2; }
+  .quest-dungeon-grid { position:relative; display:flex; flex-wrap:wrap; gap:14px; margin-top:14px; align-items:flex-end; z-index:2; }
+  .quest-dungeon .lost-soul { position:relative; width:36px; height:36px; display:inline-block; line-height:0; filter:grayscale(0.9) brightness(0.5) sepia(0.8) hue-rotate(-30deg); cursor:pointer; animation:questLostBob 3s ease-in-out infinite; }
+  .quest-dungeon .lost-soul::after { content:''; position:absolute; inset:-6px -2px; border-left:2px solid #5a3020; border-right:2px solid #5a3020; opacity:0.7; }
+  .quest-dungeon .lost-soul:hover { filter:none; animation-play-state:paused; }
+  @keyframes questLostBob { 0%,100%{transform:translateY(0) rotate(-1deg)} 50%{transform:translateY(-3px) rotate(1deg)} }
+  .dungeon-flame { position:absolute; bottom:0; font-size:22px; animation:questFlame 0.8s ease-in-out infinite alternate; pointer-events:none; }
+  @keyframes questFlame { 0%{transform:translateY(0) scaleY(1); opacity:0.85} 100%{transform:translateY(-4px) scaleY(1.15); opacity:1} }
+  .dungeon-skull { position:absolute; top:8px; font-size:18px; opacity:0.4; }
+  .dungeon-ember { position:absolute; bottom:0; width:3px; height:3px; background:#FF6B00; border-radius:50%; box-shadow:0 0 6px #FF4400; animation:questDungeonEmber 3s ease-out infinite; }
+  @keyframes questDungeonEmber { 0%{transform:translateY(0); opacity:1} 100%{transform:translateY(-140px) translateX(var(--ex,10px)); opacity:0} }
+  @keyframes questBobR { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-3px)} }
+
   /* Particle canvas */
   .quest-particles { position:absolute; inset:0; pointer-events:none; z-index:50; }
 
@@ -4853,13 +4914,27 @@ function renderQuest() {
   // Live event ticker — recent funnel activity
   html += buildQuestTicker();
 
-  // Lost-pit sidebar
+  // Lost-pit sidebar — now a fiery dungeon
   if (lostLeads.length) {
-    html += `<div style="background:#3a2920;padding:14px 20px;margin:24px -24px -28px;border-top:3px solid #000;font-family:'Press Start 2P',monospace;font-size:9px;color:#888;">
-      <strong style="color:#E53935;">☠ GAME OVER PIT ×${lostLeads.length}</strong>
-      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;align-items:center;">
-        ${lostLeads.map((r, i) => `<span class="quest-sprite-lost" onclick="openEdit('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name + ' ' + r.data.last_name)} — click to revive" style="cursor:pointer;width:30px;height:30px;display:inline-block;line-height:0;filter:grayscale(0.85) brightness(0.7);animation:bobR 2.5s ease-in-out infinite;animation-delay:-${(i*0.4)%2}s;">${critterFor(r.data.email || r.key, r)}</span>`).join('')}
-        <span style="color:#666;margin-left:8px;">← CLICK TO REVIVE</span>
+    // Spawn flames evenly across the bottom + skulls + drifting embers
+    const flameCount = Math.min(8, Math.max(4, Math.ceil(lostLeads.length / 2)));
+    const flames = Array.from({length: flameCount}).map((_, i) =>
+      `<div class="dungeon-flame" style="left:${(i+1)*(100/(flameCount+1))}%;animation-delay:-${(i*0.13)%0.8}s;">🔥</div>`
+    ).join('');
+    const skulls = Array.from({length: 3}).map((_, i) =>
+      `<div class="dungeon-skull" style="left:${15 + i*30}%;animation:questBobR ${3+i*0.5}s ease-in-out infinite;animation-delay:-${i}s;">💀</div>`
+    ).join('');
+    const embers = Array.from({length: 12}).map((_, i) =>
+      `<div class="dungeon-ember" style="left:${Math.random()*100}%;--ex:${(Math.random()-0.5)*40}px;animation-delay:-${Math.random()*3}s;"></div>`
+    ).join('');
+    html += `<div class="quest-dungeon">
+      ${skulls}
+      ${flames}
+      ${embers}
+      <div class="quest-dungeon-title">🔥 DUNGEON OF LOST SOULS ×${lostLeads.length} 🔥</div>
+      <div class="quest-dungeon-grid">
+        ${lostLeads.map((r, i) => `<span class="lost-soul" onclick="openEdit('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name + ' ' + r.data.last_name)} — click to revive" style="animation-delay:-${(i*0.4)%3}s;">${critterFor(r.data.email || r.key, r)}</span>`).join('')}
+        <span style="color:#FF6B00;margin-left:12px;font-family:'Press Start 2P',monospace;font-size:8px;text-shadow:0 0 4px #FF4400;">← CLICK TO REVIVE</span>
       </div>
     </div>`;
   }
@@ -5111,6 +5186,35 @@ function buildWeatherLayer(host) {
 function decorateRoomAtmospheres() {
   // Decorate each room based on its key
   document.querySelectorAll('.quest-room').forEach(room => {
+    // Add scene background once
+    if (!room.querySelector('.room-scene')) {
+      const scene = document.createElement('div');
+      scene.className = 'room-scene';
+      const label = (room.querySelector('.quest-room-label')?.textContent || '').toUpperCase();
+      if (label.includes('NEW')) scene.classList.add('scene-new');
+      else if (label.includes('CALL')) scene.classList.add('scene-call');
+      else if (label.includes('TEXT')) scene.classList.add('scene-text');
+      else if (label.includes('EMAIL')) scene.classList.add('scene-email');
+      else if (label.includes('$30 OFF')) scene.classList.add('scene-promo');
+      else if (label.includes('PAID')) scene.classList.add('scene-paid');
+      else if (label.includes('WAITING')) scene.classList.add('scene-waiting');
+      else if (label.includes('CLASS DAY')) {
+        scene.classList.add('scene-classday');
+        // Add chalkboard, instructor, and a row of desks
+        scene.innerHTML = `
+          <div class="chalkboard"></div>
+          <div class="instructor">🧑‍🏫</div>
+          <div class="desk" style="bottom:6px;left:10%;"></div>
+          <div class="desk" style="bottom:6px;left:30%;"></div>
+          <div class="desk" style="bottom:6px;left:50%;transform:translateX(-50%);"></div>
+          <div class="desk" style="bottom:6px;right:30%;"></div>
+          <div class="desk" style="bottom:6px;right:10%;"></div>
+        `;
+      }
+      else if (label.includes('CERTIFIED')) scene.classList.add('scene-certified');
+      // Insert as FIRST child so it paints behind all other content
+      room.insertBefore(scene, room.firstChild);
+    }
     if (room.querySelector('.room-atmo')) return; // already decorated
     const label = (room.querySelector('.quest-room-label')?.textContent || '').toUpperCase();
     if (label.includes('CALL')) addAtmo(room, 'phone-ring', '📞');
