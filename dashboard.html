@@ -5598,11 +5598,9 @@ function runCatchupReplayIfNeeded(host, leads, byStage) {
     decoratePromoChest();
     return;
   }
-  // Cap at 30 events; show summary count for the rest
-  const playable = events.slice(0, 30);
-  const overflow = events.length - playable.length;
+  // No cap — show everything you missed
   CATCHUP_RUNNING = true;
-  playCatchup(host, playable, overflow, () => {
+  playCatchup(host, events, 0, () => {
     saveQuestSnapshot(curr);
     window.__questCatchupDone = true;
     CATCHUP_RUNNING = false;
@@ -5615,19 +5613,30 @@ function playCatchup(host, events, overflow, done) {
   const awayLabel = minutesAway < 60 ? `${minutesAway} min ago`
                   : minutesAway < 1440 ? `${Math.round(minutesAway/60)} hr ago`
                   : `${Math.round(minutesAway/1440)} d ago`;
+  // Per-event duration: scale down if there are tons so total playback stays sane
+  // 1-20 events: 650ms each. 21-60: 400ms. 61-150: 250ms. 150+: 150ms.
+  const perEvent = events.length <= 20 ? 650
+                 : events.length <= 60 ? 400
+                 : events.length <= 150 ? 250 : 150;
   const overlay = document.createElement('div');
   overlay.className = 'quest-catchup';
   overlay.innerHTML = `
-    <div class="cu-title">📼 CATCHING UP · ${events.length}${overflow ? '+' : ''} EVENTS</div>
-    <div style="font-size:8px;color:#888;">since last visit · ${awayLabel}</div>
+    <div class="cu-title">📼 CATCHING UP · ${events.length} EVENTS</div>
+    <div style="font-size:8px;color:#888;">since last visit · ${awayLabel} · ~${Math.ceil(events.length * perEvent / 1000)}s</div>
     <div class="cu-event">Press play...</div>
     <div class="cu-progress"><div class="cu-progress-fill" style="width:0%;"></div></div>
-    <span class="cu-skip" onclick="window.__questCatchupSkip = true;">SKIP ▶▶</span>
+    <div style="display:flex;gap:6px;justify-content:center;margin-top:10px;">
+      <span class="cu-skip" id="cuCounter" style="background:transparent;border:0;color:#888;">0 / ${events.length}</span>
+      <span class="cu-skip" onclick="window.__questCatchupSpeed = 0.3;">⏩ FASTER</span>
+      <span class="cu-skip" onclick="window.__questCatchupSkip = true;">SKIP ▶▶</span>
+    </div>
   `;
   host.appendChild(overlay);
   const eventEl = overlay.querySelector('.cu-event');
   const fillEl  = overlay.querySelector('.cu-progress-fill');
+  const counterEl = overlay.querySelector('#cuCounter');
   window.__questCatchupSkip = false;
+  window.__questCatchupSpeed = 1;
 
   let i = 0;
   function next() {
@@ -5662,9 +5671,10 @@ function playCatchup(host, events, overflow, done) {
       flashRoom('DUNGEON');
     }
     fillEl.style.width = (100 * i / events.length) + '%';
-    setTimeout(next, window.__questCatchupSkip ? 50 : 650);
+    if (counterEl) counterEl.textContent = `${i} / ${events.length}`;
+    setTimeout(next, window.__questCatchupSkip ? 30 : Math.round(perEvent * (window.__questCatchupSpeed || 1)));
   }
-  setTimeout(next, 700);
+  setTimeout(next, 600);
 }
 
 function flashRoom(label) {
