@@ -1184,6 +1184,49 @@
   @keyframes questDungeonEmber { 0%{transform:translateY(0); opacity:1} 100%{transform:translateY(-140px) translateX(var(--ex,10px)); opacity:0} }
   @keyframes questBobR { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-3px)} }
 
+  /* === Daily XP bar === */
+  .quest-xp { position:relative; padding:14px 22px; background:linear-gradient(180deg, #0a0e1a, #1a2030); border-bottom:3px solid #000; font-family:'Press Start 2P',monospace; color:#fff; z-index:5; }
+  .quest-xp-header { display:flex; justify-content:space-between; align-items:center; font-size:9px; margin-bottom:8px; letter-spacing:1px; }
+  .quest-xp-header .xp-amount { color:#FFD700; text-shadow:0 0 6px rgba(255,215,0,0.6); }
+  .quest-xp-header .xp-goal { color:#7AB8FF; }
+  .quest-xp-track { position:relative; height:18px; background:#000; border:2px solid #444; border-radius:4px; overflow:hidden; box-shadow:inset 0 2px 4px rgba(0,0,0,0.8); }
+  .quest-xp-fill { height:100%; background:linear-gradient(90deg, #FFD700 0%, #FFA500 50%, #FF6B35 100%); transition: width 1.2s ease-out; box-shadow:inset 0 -3px 0 rgba(0,0,0,0.3), 0 0 12px rgba(255,165,0,0.6); position:relative; }
+  .quest-xp-fill.full { background:linear-gradient(90deg,#7FBA00,#00D26A,#7FBA00); box-shadow:0 0 16px rgba(0,210,106,0.8); animation: questXPFull 1.5s ease-in-out infinite; }
+  @keyframes questXPFull { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.3)} }
+  .quest-xp-shimmer { position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent); animation: questXPShimmer 2s linear infinite; }
+  @keyframes questXPShimmer { from { transform: translateX(-100%) } to { transform: translateX(100%) } }
+  .quest-xp-world { display:inline-block; padding:3px 8px; background:#FFD700; color:#000; border-radius:3px; margin-right:8px; font-size:9px; }
+
+  /* === Caroline player character === */
+  .caroline-player { position:absolute; width:36px; height:36px; z-index:55; font-size:28px; pointer-events:none; filter:drop-shadow(0 3px 4px rgba(0,0,0,0.6)); animation: carolineRoam 120s ease-in-out infinite; line-height:1; }
+  .caroline-player::after { content:'Caroline'; position:absolute; top:-14px; left:50%; transform:translateX(-50%); font-family:'Press Start 2P',monospace; font-size:7px; color:#FFD700; text-shadow:1px 1px 0 #000; white-space:nowrap; }
+  .caroline-player .caroline-body { display:block; animation: carolineBob 0.6s ease-in-out infinite; }
+  @keyframes carolineBob { 0%,100%{transform:translateY(0) scaleX(1)} 25%{transform:translateY(-3px) scaleX(1)} 50%{transform:translateY(0) scaleX(-1)} 75%{transform:translateY(-3px) scaleX(-1)} }
+  /* Caroline walks the snake path through all 10 rooms */
+  @keyframes carolineRoam {
+    0%   { top:18%; left:9%; }      /* NEW */
+    9%   { top:18%; left:9%; }
+    10%  { top:18%; left:27%; }     /* CALL */
+    19%  { top:18%; left:27%; }
+    20%  { top:18%; left:45%; }     /* TEXT 1 */
+    29%  { top:18%; left:45%; }
+    30%  { top:18%; left:63%; }     /* EMAIL 1 */
+    39%  { top:18%; left:63%; }
+    40%  { top:18%; left:81%; }     /* TEXT 2 */
+    49%  { top:18%; left:81%; }
+    50%  { top:65%; left:81%; }     /* $30 OFF */
+    59%  { top:65%; left:81%; }
+    60%  { top:65%; left:63%; }     /* PAID */
+    69%  { top:65%; left:63%; }
+    70%  { top:65%; left:45%; }     /* WAITING */
+    79%  { top:65%; left:45%; }
+    80%  { top:65%; left:27%; }     /* CLASS DAY */
+    89%  { top:65%; left:27%; }
+    90%  { top:65%; left:9%; }      /* CERTIFIED */
+    99%  { top:65%; left:9%; }
+    100% { top:18%; left:9%; }
+  }
+
   /* Particle canvas */
   .quest-particles { position:absolute; inset:0; pointer-events:none; z-index:50; }
 
@@ -1435,11 +1478,11 @@
       <div class="card" style="padding:0;overflow:hidden;background:transparent;border:0;box-shadow:none;">
         <div style="padding:16px 20px;background:#fff;border-radius:12px 12px 0 0;border:1px solid var(--gray-200);border-bottom:0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
           <div>
-            <h2 style="margin:0;font-family:monospace;letter-spacing:1px;">🎮 LEAD QUEST <span style="font-size:12px;color:var(--gray-500);font-family:inherit;">World 1-1</span></h2>
+            <h2 style="margin:0;font-family:monospace;letter-spacing:1px;">🎮 LEAD QUEST <span id="questWorldLabelInline" style="font-size:12px;color:var(--gray-500);font-family:inherit;">World 1-1</span></h2>
             <p style="margin:6px 0 0;font-size:12px;color:var(--gray-500);font-family:monospace;">Every pending lead is a sprite. Click them. Watch them level up as they progress through your follow-up sequence. <strong>Goal: 🏰 castle = paid.</strong></p>
           </div>
           <div id="questScore" style="font-family:monospace;font-size:14px;color:var(--gray-700);text-align:right;">
-            <div>WORLD <strong>1-1</strong></div>
+            <div>WORLD <strong id="questWorldLabel">1-1</strong></div>
             <div id="questCoins">🪙 ×0</div>
           </div>
         </div>
@@ -5103,6 +5146,9 @@ function enhanceQuestVisuals(leads, byStage) {
   decorateRoomAtmospheres();
   applyIdleSleepZ();
   ensureParticleCanvas(host);
+  buildXPBar(host, leads);
+  ensureCarolinePlayer(host);
+  updateWorldLevel(leads);
 
   // Detect new conversions / certifications since last render
   const sig = leads.map(l => l.key + ':' + (l.data.status||'') + ':' + (l.data.lead_stage||'')).join('|');
@@ -5392,6 +5438,77 @@ function checkAchievements(leads, newWinsCount) {
   Object.keys(seen).forEach(k => {
     if (typeof seen[k] === 'string' && seen[k] !== todayStr && seen[k].includes('-')) delete seen[k];
   });
+}
+
+// Daily XP bar — fills with today's confirmed revenue toward goal
+const DAILY_GOAL = 1000;
+function buildXPBar(host, leads) {
+  let bar = document.querySelector('.quest-xp');
+  const todayStr = today();
+  const todayConfirmed = leads.filter(l => l.data.status === 'confirmed' && (l.data.submitted_at||'').slice(0,10) === todayStr);
+  const todayRev = todayConfirmed.reduce((s,r) => s + amountFor(r), 0);
+  const pct = Math.min(100, (todayRev / DAILY_GOAL) * 100);
+  const isFull = pct >= 100;
+  const monthRev = monthlyConfirmedRevenue(leads);
+  const world = worldLevelFromRev(monthRev);
+
+  const html = `
+    <div class="quest-xp-header">
+      <span><span class="quest-xp-world">WORLD ${world}</span> DAILY XP</span>
+      <span><span class="xp-amount">$${Math.round(todayRev).toLocaleString()}</span> / <span class="xp-goal">$${DAILY_GOAL.toLocaleString()} GOAL</span></span>
+    </div>
+    <div class="quest-xp-track">
+      <div class="quest-xp-fill ${isFull ? 'full' : ''}" style="width:${pct}%;">
+        ${pct > 10 ? '<div class="quest-xp-shimmer"></div>' : ''}
+      </div>
+    </div>
+  `;
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'quest-xp';
+    bar.innerHTML = html;
+    host.insertBefore(bar, host.firstChild);
+  } else {
+    bar.innerHTML = html;
+  }
+
+  // Goal-hit celebration: fire achievement once per day
+  const seenKey = 'goalHit_' + todayStr;
+  if (isFull && !QUEST_STATE.lastSeenAch[seenKey]) {
+    showAchievement('🎯', 'Daily goal hit!', `$${Math.round(todayRev)} earned today`);
+    QUEST_STATE.lastSeenAch[seenKey] = true;
+  }
+}
+
+function monthlyConfirmedRevenue(leads) {
+  const ym = today().slice(0,7);
+  return leads.filter(l => l.data.status === 'confirmed' && (l.data.submitted_at||'').startsWith(ym))
+    .reduce((s,r) => s + amountFor(r), 0);
+}
+function worldLevelFromRev(monthRev) {
+  // Each $10k earned this month = next sub-level. 1-1 (<$10k), 1-2 ($10-20k), 1-3 ($20-30k), then 2-1 at $50k, etc.
+  const subLevel = Math.floor(monthRev / 10000) + 1;
+  if (subLevel <= 5) return `1-${subLevel}`;
+  if (subLevel <= 10) return `2-${subLevel - 5}`;
+  return `3-${Math.min(subLevel - 10, 5)}`;
+}
+function updateWorldLevel(leads) {
+  const w = worldLevelFromRev(monthlyConfirmedRevenue(leads));
+  const a = document.getElementById('questWorldLabel');
+  const b = document.getElementById('questWorldLabelInline');
+  if (a) a.textContent = w;
+  if (b) b.textContent = 'World ' + w;
+}
+
+// Caroline — the player character roaming the board
+function ensureCarolinePlayer(host) {
+  if (document.querySelector('.caroline-player')) return;
+  const grid = host.querySelector('.quest-grid');
+  if (!grid) return;
+  const car = document.createElement('div');
+  car.className = 'caroline-player';
+  car.innerHTML = '<span class="caroline-body">👩🏻‍⚕️</span>';
+  grid.appendChild(car);
 }
 
 function showAchievement(icon, title, sub) {
