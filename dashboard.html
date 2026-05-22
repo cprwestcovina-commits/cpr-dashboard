@@ -1184,6 +1184,35 @@
   @keyframes questDungeonEmber { 0%{transform:translateY(0); opacity:1} 100%{transform:translateY(-140px) translateX(var(--ex,10px)); opacity:0} }
   @keyframes questBobR { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(-3px)} }
 
+  /* === Dungeon extras: lava bubbles + demon prowl === */
+  .dungeon-bubble { position:absolute; bottom:0; width:8px; height:8px; background:radial-gradient(circle at 30% 30%, #FFE066, #FF6B00 60%, transparent 70%); border-radius:50%; animation: questBubble 2.5s ease-in infinite; pointer-events:none; }
+  @keyframes questBubble { 0%{transform:translateY(0) scale(0.4); opacity:0.9} 100%{transform:translateY(-90px) scale(1.4); opacity:0} }
+  .dungeon-demon { position:absolute; bottom:6px; left:0; font-size:24px; animation: questDemonPace 14s linear infinite; pointer-events:none; filter:drop-shadow(0 0 8px rgba(255,68,0,0.7)); }
+  @keyframes questDemonPace { 0%,100%{left:2%; transform:scaleX(1)} 49%{left:88%; transform:scaleX(1)} 50%{left:88%; transform:scaleX(-1)} 99%{left:2%; transform:scaleX(-1)} }
+
+  /* === Treasure chest in $30 OFF === */
+  .promo-chest { position:absolute; bottom:8px; right:8px; font-size:22px; z-index:2; animation: questChest 8s ease-in-out infinite; cursor:default; pointer-events:none; }
+  @keyframes questChest { 0%,80%,100%{content:'📦'; transform:scale(1)} 82%{transform:scale(1.15) rotate(-3deg)} 85%{transform:scale(1.2) rotate(3deg)} 90%{transform:scale(1.05)} }
+  .promo-chest::after { content:'✨'; position:absolute; top:-12px; right:-8px; font-size:12px; opacity:0; animation: questChestSparkle 8s ease-in-out infinite; }
+  @keyframes questChestSparkle { 0%,80%,100%{opacity:0; transform:scale(0.5)} 85%{opacity:1; transform:scale(1.3)} 92%{opacity:0; transform:scale(0.8)} }
+
+  /* === Neighbor reaction jump === */
+  .room-sprite.cheer { animation: questCheer 0.8s ease-in-out; }
+  @keyframes questCheer { 0%,100%{transform:translateY(0)} 30%{transform:translateY(-12px) rotate(-5deg)} 60%{transform:translateY(-12px) rotate(5deg)} }
+  .room-sprite.peek { animation: questPeek 1s ease-out; }
+  @keyframes questPeek { 0%,100%{transform:translateX(0)} 50%{transform:translateX(8px) rotate(5deg)} }
+
+  /* === Catch-up replay overlay === */
+  .quest-catchup { position:absolute; top:18px; left:50%; transform:translateX(-50%); background:linear-gradient(180deg, rgba(20,30,60,0.95), rgba(10,20,40,0.95)); border:2px solid #FFD700; border-radius:12px; padding:14px 24px; font-family:'Press Start 2P',monospace; font-size:10px; color:#fff; z-index:90; box-shadow:0 8px 30px rgba(0,0,0,0.6), 0 0 20px rgba(255,215,0,0.4); animation: questCatchupIn 0.4s ease-out; min-width:340px; text-align:center; }
+  @keyframes questCatchupIn { from{transform:translate(-50%,-30px); opacity:0} to{transform:translate(-50%,0); opacity:1} }
+  .quest-catchup .cu-title { color:#FFD700; letter-spacing:2px; margin-bottom:8px; font-size:11px; }
+  .quest-catchup .cu-event { font-size:9px; color:#7AB8FF; margin-top:6px; min-height:14px; }
+  .quest-catchup .cu-progress { height:6px; background:#000; border-radius:3px; margin-top:10px; overflow:hidden; border:1px solid #333; }
+  .quest-catchup .cu-progress-fill { height:100%; background:linear-gradient(90deg, #FFD700, #FF6B35); transition: width 0.3s ease-out; box-shadow:0 0 8px rgba(255,165,0,0.6); }
+  .quest-catchup .cu-skip { display:inline-block; margin-top:10px; padding:4px 10px; background:#333; border:1px solid #666; border-radius:4px; color:#aaa; font-size:8px; cursor:pointer; pointer-events:auto; }
+  .quest-catchup .cu-skip:hover { background:#555; color:#fff; }
+  .quest-room.cu-highlight { box-shadow:0 0 0 4px #FFD700, 0 0 30px rgba(255,215,0,0.6); transition: box-shadow 0.3s; }
+
   /* === Daily XP bar === */
   .quest-xp { position:relative; padding:14px 22px; background:linear-gradient(180deg, #0a0e1a, #1a2030); border-bottom:3px solid #000; font-family:'Press Start 2P',monospace; color:#fff; z-index:5; }
   .quest-xp-header { display:flex; justify-content:space-between; align-items:center; font-size:9px; margin-bottom:8px; letter-spacing:1px; }
@@ -5144,11 +5173,15 @@ function enhanceQuestVisuals(leads, byStage) {
   if (!host) return;
   buildWeatherLayer(host);
   decorateRoomAtmospheres();
+  decorateDungeonExtras(host);
   applyIdleSleepZ();
   ensureParticleCanvas(host);
   buildXPBar(host, leads);
   ensureCarolinePlayer(host);
   updateWorldLevel(leads);
+
+  // Catch up on events that happened while dashboard was closed
+  runCatchupReplayIfNeeded(host, leads, byStage);
 
   // Detect new conversions / certifications since last render
   const sig = leads.map(l => l.key + ':' + (l.data.status||'') + ':' + (l.data.lead_stage||'')).join('|');
@@ -5437,6 +5470,189 @@ function checkAchievements(leads, newWinsCount) {
   // Reset old day flags
   Object.keys(seen).forEach(k => {
     if (typeof seen[k] === 'string' && seen[k] !== todayStr && seen[k].includes('-')) delete seen[k];
+  });
+}
+
+// Add lava bubbles + prowling demon to the dungeon
+function decorateDungeonExtras(host) {
+  const dungeon = host.parentElement?.querySelector('.quest-dungeon') || document.querySelector('.quest-dungeon');
+  if (!dungeon || dungeon.dataset.extrasDecorated) return;
+  dungeon.dataset.extrasDecorated = '1';
+  // Bubbles
+  for (let i = 0; i < 10; i++) {
+    const b = document.createElement('div');
+    b.className = 'dungeon-bubble';
+    b.style.left = (Math.random() * 100) + '%';
+    b.style.animationDelay = (-Math.random() * 2.5) + 's';
+    dungeon.appendChild(b);
+  }
+  // Demon prowling at the bottom
+  const d = document.createElement('div');
+  d.className = 'dungeon-demon';
+  d.textContent = '👹';
+  dungeon.appendChild(d);
+}
+
+// Add a treasure chest to the $30 OFF room
+function decoratePromoChest() {
+  document.querySelectorAll('.quest-room').forEach(room => {
+    const label = (room.querySelector('.quest-room-label')?.textContent || '').toUpperCase();
+    if (label.includes('$30 OFF') && !room.querySelector('.promo-chest')) {
+      const c = document.createElement('div');
+      c.className = 'promo-chest';
+      c.textContent = '📦';
+      // Cycle to open chest every ~8s
+      let open = false;
+      setInterval(() => {
+        open = !open;
+        c.textContent = open ? '🎁' : '📦';
+      }, 4000);
+      room.appendChild(c);
+    }
+  });
+}
+
+// ============================================================
+// CATCH-UP REPLAY — diff localStorage snapshot vs current state,
+// replay events visually so the user sees what happened while away.
+// ============================================================
+function loadQuestSnapshot() {
+  try { return JSON.parse(localStorage.getItem('questSnapshot') || '{}'); } catch { return {}; }
+}
+function saveQuestSnapshot(snap) {
+  try { localStorage.setItem('questSnapshot', JSON.stringify(snap)); } catch {}
+}
+function buildSnapshot(leads) {
+  const snap = {};
+  leads.forEach(l => {
+    snap[l.key] = {
+      status: l.data.status,
+      stage: (l.data.lead_stage || '').toLowerCase(),
+      date: l.data.date || '',
+      first_name: l.data.first_name || '',
+      course_type: l.data.course_type || '',
+    };
+  });
+  snap.__ts = Date.now();
+  return snap;
+}
+function diffSnapshots(prev, curr, allLeadsByKey) {
+  const events = [];
+  Object.keys(curr).forEach(k => {
+    if (k === '__ts') return;
+    const c = curr[k]; const p = prev[k];
+    const lead = allLeadsByKey[k];
+    if (!lead) return;
+    if (!p) {
+      events.push({ type: 'new', key: k, lead });
+    } else {
+      if (p.status === 'pending' && c.status === 'confirmed') events.push({ type: 'paid', key: k, lead });
+      else if (p.status === 'confirmed' && c.status !== 'confirmed') events.push({ type: 'lost', key: k, lead });
+      else if (p.stage !== c.stage && c.status === 'pending') events.push({ type: 'stage', key: k, lead, from: p.stage, to: c.stage });
+    }
+  });
+  return events;
+}
+
+let CATCHUP_RUNNING = false;
+function runCatchupReplayIfNeeded(host, leads, byStage) {
+  if (CATCHUP_RUNNING) return;
+  // Only run once per tab session
+  if (window.__questCatchupDone) return;
+  const prev = loadQuestSnapshot();
+  const curr = buildSnapshot(leads);
+  // First-ever visit: just save the snapshot, no replay
+  if (!prev.__ts || Object.keys(prev).length < 2) {
+    saveQuestSnapshot(curr);
+    window.__questCatchupDone = true;
+    decoratePromoChest();
+    return;
+  }
+  const leadsByKey = {};
+  leads.forEach(l => leadsByKey[l.key] = l);
+  const events = diffSnapshots(prev, curr, leadsByKey);
+  if (events.length === 0) {
+    saveQuestSnapshot(curr);
+    window.__questCatchupDone = true;
+    decoratePromoChest();
+    return;
+  }
+  // Cap at 30 events; show summary count for the rest
+  const playable = events.slice(0, 30);
+  const overflow = events.length - playable.length;
+  CATCHUP_RUNNING = true;
+  playCatchup(host, playable, overflow, () => {
+    saveQuestSnapshot(curr);
+    window.__questCatchupDone = true;
+    CATCHUP_RUNNING = false;
+    decoratePromoChest();
+  });
+}
+
+function playCatchup(host, events, overflow, done) {
+  const minutesAway = Math.round((Date.now() - (loadQuestSnapshot().__ts || Date.now())) / 60000);
+  const awayLabel = minutesAway < 60 ? `${minutesAway} min ago`
+                  : minutesAway < 1440 ? `${Math.round(minutesAway/60)} hr ago`
+                  : `${Math.round(minutesAway/1440)} d ago`;
+  const overlay = document.createElement('div');
+  overlay.className = 'quest-catchup';
+  overlay.innerHTML = `
+    <div class="cu-title">📼 CATCHING UP · ${events.length}${overflow ? '+' : ''} EVENTS</div>
+    <div style="font-size:8px;color:#888;">since last visit · ${awayLabel}</div>
+    <div class="cu-event">Press play...</div>
+    <div class="cu-progress"><div class="cu-progress-fill" style="width:0%;"></div></div>
+    <span class="cu-skip" onclick="window.__questCatchupSkip = true;">SKIP ▶▶</span>
+  `;
+  host.appendChild(overlay);
+  const eventEl = overlay.querySelector('.cu-event');
+  const fillEl  = overlay.querySelector('.cu-progress-fill');
+  window.__questCatchupSkip = false;
+
+  let i = 0;
+  function next() {
+    if (i >= events.length || window.__questCatchupSkip) {
+      // Final state
+      if (overflow > 0) eventEl.textContent = `+ ${overflow} more events (older)`;
+      else eventEl.textContent = '✓ All caught up';
+      fillEl.style.width = '100%';
+      setTimeout(() => {
+        overlay.style.transition = 'opacity 0.5s';
+        overlay.style.opacity = '0';
+        setTimeout(() => { overlay.remove(); done(); }, 500);
+      }, overflow > 0 ? 1200 : 700);
+      return;
+    }
+    const ev = events[i++];
+    const fname = ev.lead?.data?.first_name || 'Lead';
+    const ct = (ev.lead?.data?.course_type || '').replace(/^aha_/, '').toUpperCase();
+
+    if (ev.type === 'paid') {
+      eventEl.innerHTML = `💰 <strong style="color:#FFD700;">${fname}</strong> paid · ${ct}`;
+      spawnCoinBurst(host);
+      flashRoom('PAID');
+    } else if (ev.type === 'new') {
+      eventEl.innerHTML = `🆕 New lead: <strong>${fname}</strong> · ${ct}`;
+      flashRoom('NEW');
+    } else if (ev.type === 'stage') {
+      eventEl.innerHTML = `➜ <strong>${fname}</strong>: ${ev.from || 'new'} → <strong style="color:#7AB8FF;">${ev.to || '?'}</strong>`;
+      flashRoom(ev.to || '');
+    } else if (ev.type === 'lost') {
+      eventEl.innerHTML = `☠ <strong style="color:#FF4400;">${fname}</strong> lost`;
+      flashRoom('DUNGEON');
+    }
+    fillEl.style.width = (100 * i / events.length) + '%';
+    setTimeout(next, window.__questCatchupSkip ? 50 : 650);
+  }
+  setTimeout(next, 700);
+}
+
+function flashRoom(label) {
+  document.querySelectorAll('.quest-room').forEach(room => {
+    const l = (room.querySelector('.quest-room-label')?.textContent || '').toUpperCase();
+    if (l.includes(label.toUpperCase())) {
+      room.classList.add('cu-highlight');
+      setTimeout(() => room.classList.remove('cu-highlight'), 600);
+    }
   });
 }
 
