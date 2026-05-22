@@ -1837,9 +1837,21 @@ function renderCalendarPage() {
                          : (ct === 'acls') ? 'acls'
                          : (ct === 'pals') ? 'pals'
                          : '';
-          const cls = courseCls;  // all calendar entries are confirmed by filter above
+          const cls = courseCls;
+          // Small course pill next to name (matches the cal-booking border color)
+          const pillColor = courseCls === 'renewal' ? 'var(--blue)'
+                          : courseCls === 'heartsaver' ? '#16a085'
+                          : courseCls === 'acls' ? '#8e44ad'
+                          : courseCls === 'pals' ? '#d35400'
+                          : 'var(--red)';
+          const pillLabel = courseCls === 'renewal' ? 'RNW'
+                          : courseCls === 'heartsaver' ? 'HS'
+                          : courseCls === 'acls' ? 'ACLS'
+                          : courseCls === 'pals' ? 'PALS'
+                          : 'BLS';
+          const coursePill = ` <span style="background:${pillColor}1A;color:${pillColor};padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.3px;">${pillLabel}</span>`;
           const adBadge = r.data.source === 'paid_ad' ? ' <span style="background:#FCEAE8;color:var(--red);padding:0 4px;border-radius:3px;font-size:9px;font-weight:700;">AD</span>' : '';
-          return `<div class="cal-booking ${cls}" style="cursor:pointer;" onclick="openBookingActions('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name)} ${escapeHtml(r.data.last_name)} · ${escapeHtml(r.data.time_label)} · ${escapeHtml(r.data.status)}${r.data.source ? ' · ' + escapeHtml(r.data.source) : ''} — click for actions">${escapeHtml(r.data.time_label || '?')} ${escapeHtml(r.data.first_name || '')}${adBadge}</div>`;
+          return `<div class="cal-booking ${cls}" style="cursor:pointer;" onclick="openBookingActions('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name)} ${escapeHtml(r.data.last_name)} · ${escapeHtml(r.data.time_label)} · ${pillLabel} · ${escapeHtml(r.data.status)}${r.data.source ? ' · ' + escapeHtml(r.data.source) : ''} — click for actions">${escapeHtml(r.data.time_label || '?')} ${escapeHtml(r.data.first_name || '')}${coursePill}${adBadge}</div>`;
         }).join('')}
         ${dayBookings.length > 5 ? `<div class="small">+${dayBookings.length - 5} more</div>` : ''}
       </div>
