@@ -3469,13 +3469,14 @@ loadAll = async function() {
   window.__lastSyncMs = Date.now();
 };
 
-// --- Auto-refresh: data every 60s, health every 60s ---
+// --- Auto-refresh: data every 5min (was 60s — reduced to avoid Make org rate limit) ---
 setInterval(() => {
   if (location.search.includes('mock=1')) return;
   if (!IS_HOSTED && !MAKE_TOKEN) return;
   if (IS_HOSTED && !DASHBOARD_PW) return;
+  if (document.hidden) return; // skip when tab not visible
   if (currentTab !== 'pipeline') loadAll(); // pipeline has its own 5s poll
-}, 60000);
+}, 300000);
 
 setInterval(() => {
   if (location.search.includes('mock=1')) return;
