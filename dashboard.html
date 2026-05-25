@@ -3826,7 +3826,7 @@ function renderLeadsWon() {
 
     <h3 style="margin:0 0 10px;font-size:16px;">🏆 All Wins ${wins.length ? `(${wins.length})` : ''}</h3>
     ${recentWins.length ? `<table style="width:100%;"><thead><tr>
-      <th>Student</th><th>Email</th><th>Phone</th><th>Class Date</th><th>Submitted</th><th>Course</th><th>Revenue</th>
+      <th>Student</th><th>Email</th><th>Phone</th><th>Class Date</th><th>Submitted</th><th>Course</th><th>Revenue</th><th></th>
     </tr></thead><tbody>
       ${recentWins.map(r => {
         const d = r.data;
@@ -3838,7 +3838,11 @@ function renderLeadsWon() {
           <td>${escapeHtml(fmtDate(d.date))}<br><span class="small">${escapeHtml(d.time_label || '')}</span></td>
           <td><span class="small">${days}d ago</span></td>
           <td>${courseLabel(d.course_type)}</td>
-          <td><strong style="color:var(--green);">$${priceFor(d.course_type)}</strong></td>
+          <td><strong style="color:var(--green);">$${amountFor(r)}</strong></td>
+          <td style="white-space:nowrap;">
+            <button class="btn" style="padding:4px 8px;font-size:11px;" onclick="openEdit('${escapeHtml(r.key)}')">Edit</button>
+            <button class="btn" style="padding:4px 8px;font-size:11px;background:#fef2f2;color:#b91c1c;border-color:#fecaca;" onclick="actionDelete('${escapeHtml(r.key)}')" title="Delete this record">🗑</button>
+          </td>
         </tr>`;
       }).join('')}
     </tbody></table>` : '<div class="empty">No wins yet. Come on, sell some classes 💪</div>'}
