@@ -1430,7 +1430,6 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
           <h2 style="margin:0;">Pending Leads <span class="count" id="leadsCount">0</span></h2>
           <div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:8px;">
-            <button id="leadsViewTable" onclick="setLeadsView('table')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">📋 Table</button>
             <button id="leadsViewPipeline" onclick="setLeadsView('pipeline')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🎯 Pipeline</button>
             <button id="leadsViewWon" onclick="setLeadsView('won')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🏆 Wins</button>
           </div>
@@ -3619,7 +3618,8 @@ async function markLeadWon(key) {
 
 // --- View toggle ---
 function getLeadsView() {
-  return localStorage.getItem('leadsView') || 'table';
+  const v = localStorage.getItem('leadsView') || 'pipeline';
+  return v === 'table' ? 'pipeline' : v;  // fold legacy 'table' into pipeline
 }
 function setLeadsView(v) {
   localStorage.setItem('leadsView', v);
@@ -3700,16 +3700,17 @@ renderLeads = function() {
     renderLeadsWon();
     setLeadsView_uiOnly('won');
   } else {
+    // Legacy 'table' view falls back to pipeline
     __origRenderLeads();
-    setLeadsView_uiOnly('table');
+    renderLeadsKanban();
+    setLeadsView_uiOnly('pipeline');
   }
 };
 function setLeadsView_uiOnly(v) {
-  const tbtn = document.getElementById('leadsViewTable');
   const pbtn = document.getElementById('leadsViewPipeline');
   const wbtn = document.getElementById('leadsViewWon');
-  if (!tbtn || !pbtn || !wbtn) return;
-  [['table',tbtn],['pipeline',pbtn],['won',wbtn]].forEach(([k, btn]) => {
+  if (!pbtn || !wbtn) return;
+  [['pipeline',pbtn],['won',wbtn]].forEach(([k, btn]) => {
     btn.style.background = v === k ? '#fff' : 'transparent';
     btn.style.boxShadow = v === k ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
   });
