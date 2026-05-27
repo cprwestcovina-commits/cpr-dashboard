@@ -1606,6 +1606,7 @@
     <h3 style="margin-bottom:8px;" id="actionsTitle">Booking</h3>
     <div id="actionsSubtitle" style="color:var(--gray-700);font-size:14px;margin-bottom:20px;"></div>
     <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn" onclick="actionResendConfirmation()" style="background:#16A34A;color:#fff;">📧 Resend Confirmation Email + Calendar</button>
       <button class="btn" onclick="actionReschedule()">🔄 Reschedule</button>
       <button class="btn" id="actionSourceBtn" onclick="actionToggleSource()"></button>
       <button class="btn" onclick="actionCancel()" style="background:#fff;color:var(--red);border:1px solid var(--red);">✖ Mark Cancelled (keep record)</button>
@@ -2469,6 +2470,7 @@ function renderStudents() {
         <td>${statusPill(r.data.status)}</td>
         <td>${courseLabel(r.data.course_type)}</td>
         <td style="white-space:nowrap;">
+          <button class="btn" style="padding:4px 8px;font-size:11px;background:#dcfce7;color:#166534;border-color:#bbf7d0;" onclick="actionResendByKey('${escapeHtml(r.key)}')" title="Resend confirmation email + calendar invite">📧 Resend</button>
           <button class="btn" style="padding:4px 10px;font-size:12px;" onclick="openReschedule('${escapeHtml(r.key)}')">Reschedule</button>
           <button class="btn" style="padding:4px 10px;font-size:12px;background:#fef2f2;color:#b91c1c;border-color:#fecaca;" onclick="actionDelete('${escapeHtml(r.key)}')" title="Permanently delete">🗑 Delete</button>
         </td>
@@ -2513,6 +2515,42 @@ async function actionToggleSource() {
     await loadAll();
   } catch (e) {
     alert('Failed: ' + e.message);
+  }
+}
+
+// Standalone version for rows that have their own key (Students tab etc.)
+async function actionResendByKey(key) {
+  actionsKey = key;
+  return actionResendConfirmation();
+}
+
+async function actionResendConfirmation() {
+  const r = RECORDS.find(x => x.key === actionsKey);
+  if (!r) return;
+  if (!confirm(`Resend confirmation email + calendar invite to ${r.data.first_name} ${r.data.last_name} (${r.data.email})?\n\nThis fires the manual confirmation webhook — they'll get the email within ~30s and a new Google Calendar event will be created.`)) return;
+  try {
+    const res = await fetch('https://hook.us2.make.com/v4uxgw7pstxpcjmg63iii2dcy837kcwj', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        booking_id: r.data.booking_id || r.key,
+        first_name: r.data.first_name || '',
+        last_name: r.data.last_name || '',
+        email: r.data.email || '',
+        phone: r.data.phone || '',
+        date: r.data.date || '',
+        date_formatted: r.data.date_formatted || '',
+        time_label: r.data.time_label || '',
+        time_end: r.data.time_end || '',
+        location: r.data.location || '100 Barranca St #255-B, West Covina, CA 91791',
+        course_type: r.data.course_type || 'bls',
+      }),
+    });
+    if (!res.ok) throw new Error('Webhook failed: ' + res.status);
+    closeActions();
+    alert(`✓ Confirmation resend triggered for ${r.data.first_name}. Email + calendar event arrive within ~30s.`);
+  } catch (e) {
+    alert('Failed to resend: ' + e.message);
   }
 }
 
