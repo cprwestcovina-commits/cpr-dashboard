@@ -1328,6 +1328,18 @@
     <div class="page active" id="page-dashboard">
       <div class="stats" id="statsRow"></div>
 
+      <!-- Scenario Health -->
+      <div class="card" id="scenarioHealthCard" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
+          <h2 style="margin:0;">🔍 Scenario Health <span class="count" id="scenarioHealthBad" style="background:#9CA3AF;color:#fff;">0</span></h2>
+          <button class="btn btn-sm" onclick="checkScenarioHealth()">↻ Re-check</button>
+        </div>
+        <p style="color:var(--gray-500); font-size:13px; margin-bottom:12px;">
+          Last-fired timestamp per cadence scenario. Red = overdue. Yellow = approaching due. Green = ran on time.
+        </p>
+        <div id="scenarioHealthList"></div>
+      </div>
+
       <!-- Unmatched Square Payments (shown only when there are any) -->
       <div class="card" id="unmatchedPaymentsCard" style="display:none;border:2px solid var(--red);background:#fff5f4;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
@@ -4825,6 +4837,75 @@ window.addEventListener('load', () => {
   }
 });
 
+// === SCENARIO HEALTH MONITOR ===
+// Cadence scenarios + their expected freshness window (minutes)
+const MONITORED_SCENARIOS = [
+  { id: 5113311, name: 'Square webhook (Integration)',     maxAgeMin: 60*24,  type: 'event' },
+  { id: 5124029, name: 'Pay-click T+0 email + alert',      maxAgeMin: 60*12,  type: 'event' },
+  { id: 5126180, name: 'Renewal Pay-click',                maxAgeMin: 60*48,  type: 'event' },
+  { id: 5130806, name: 'Pay-click T+2hr follow-up',        maxAgeMin: 90,     type: 'hourly' },
+  { id: 5154192, name: 'Pay-click T+24hr SMS (Caroline)',  maxAgeMin: 90,     type: 'hourly' },
+  { id: 5154195, name: 'Day 5 SMS (COMEBACK30)',           maxAgeMin: 60*26,  type: 'daily' },
+  { id: 5154196, name: 'Day 7 ACLS/PALS SMS',              maxAgeMin: 60*26,  type: 'daily' },
+  { id: 5118321, name: 'Day 5 email (COMEBACK30)',         maxAgeMin: 60*26,  type: 'daily' },
+  { id: 5118287, name: '24hr Class Reminder',              maxAgeMin: 60*26,  type: 'daily' },
+  { id: 5118320, name: 'Roster: BLS Team',                 maxAgeMin: 60*26,  type: 'daily' },
+  { id: 5154146, name: 'Roster: Instructor 7 AM PT',       maxAgeMin: 60*26,  type: 'daily' },
+  { id: 5154145, name: 'Roster: Instructor 3 PM PT',       maxAgeMin: 60*26,  type: 'daily' },
+  { id: 5118321, name: 'Abandoned Day 5 push',             maxAgeMin: 60*26,  type: 'daily' },
+  { id: 5126033, name: 'Daily Health Check',               maxAgeMin: 60*26,  type: 'daily' },
+];
+
+async function checkScenarioHealth() {
+  const card = document.getElementById('scenarioHealthCard');
+  const list = document.getElementById('scenarioHealthList');
+  const badCount = document.getElementById('scenarioHealthBad');
+  if (!list) return;
+  card.style.display = 'block';
+  list.innerHTML = '<div class="empty" style="padding:14px;">Checking…</div>';
+
+  const results = await Promise.all(MONITORED_SCENARIOS.map(async (s) => {
+    try {
+      const r = await apiGet(`/scenarios/${s.id}/logs?teamId=${CONFIG.teamId}&pg[limit]=1`);
+      const logs = r.scenarioLogs || [];
+      const lastTs = logs.length ? new Date(logs[0].timestamp).getTime() : 0;
+      const ageMin = lastTs ? (Date.now() - lastTs) / 60000 : Infinity;
+      let status = 'ok';
+      if (ageMin > s.maxAgeMin * 1.5) status = 'bad';
+      else if (ageMin > s.maxAgeMin) status = 'warn';
+      // For event-type (webhook) scenarios, "no recent runs" might just mean no pay-clicks. Don't alarm.
+      if (s.type === 'event' && ageMin > s.maxAgeMin) status = 'idle';
+      return { ...s, lastTs, ageMin, status };
+    } catch (e) {
+      return { ...s, ageMin: Infinity, status: 'error', err: e.message };
+    }
+  }));
+
+  const bad = results.filter(r => r.status === 'bad').length;
+  const warn = results.filter(r => r.status === 'warn').length;
+  badCount.textContent = bad + warn;
+  badCount.style.background = bad ? '#C0392B' : warn ? '#E67E22' : '#16A34A';
+
+  list.innerHTML = `<table style="width:100%;font-size:13px;"><thead><tr>
+    <th></th><th>Scenario</th><th>Type</th><th>Last run</th><th>Status</th>
+  </tr></thead><tbody>
+    ${results.map(r => {
+      const color = r.status === 'bad' ? '#C0392B' : r.status === 'warn' ? '#E67E22' : r.status === 'idle' ? '#9CA3AF' : r.status === 'error' ? '#7C3AED' : '#16A34A';
+      const dot = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};"></span>`;
+      const lastTxt = r.lastTs ? `${Math.round(r.ageMin / 60 * 10)/10}hr ago` : 'never';
+      const expected = r.type === 'hourly' ? '< 90 min' : r.type === 'daily' ? '< 26hr' : 'on event';
+      const statusTxt = r.status === 'bad' ? `OVERDUE (expected ${expected})` : r.status === 'warn' ? `lagging (expected ${expected})` : r.status === 'idle' ? 'idle (no recent events)' : r.status === 'error' ? `err: ${r.err}` : `on time (${expected})`;
+      return `<tr>
+        <td style="width:20px;">${dot}</td>
+        <td><strong>${r.name}</strong><br><span style="font-size:11px;color:#888;">#${r.id}</span></td>
+        <td><span style="font-size:11px;color:#888;">${r.type}</span></td>
+        <td>${lastTxt}</td>
+        <td style="color:${color};font-weight:600;">${statusTxt}</td>
+      </tr>`;
+    }).join('')}
+  </tbody></table>`;
+}
+
 // Hook into renderDashboard to load team todos + check unmatched payments
 const __origRenderDashboard = renderDashboard;
 renderDashboard = function() {
@@ -4833,6 +4914,7 @@ renderDashboard = function() {
   // Run unmatched-payments check on every dashboard render (cheap — uses cached RECORDS + 1 API call)
   if (!location.search.includes('mock=1')) {
     checkUnmatchedPayments().catch(e => console.warn('unmatched check failed:', e));
+    checkScenarioHealth().catch(e => console.warn('scenario health check failed:', e));
   }
 };
 
