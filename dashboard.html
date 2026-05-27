@@ -4902,20 +4902,28 @@ async function checkScenarioHealth() {
   card.style.display = 'block';
   list.innerHTML = '<div class="empty" style="padding:14px;">Checking…</div>';
 
+  // One call to get all scenarios' state (nextExec, isActive) — saves N-1 calls
+  let scenStateById = {};
+  try {
+    const all = await apiGet(`/scenarios?teamId=${CONFIG.teamId}`);
+    (all.scenarios || []).forEach(s => scenStateById[s.id] = s);
+  } catch (e) { console.warn('scenarios list failed:', e); }
+
   const results = await Promise.all(MONITORED_SCENARIOS.map(async (s) => {
     try {
       const r = await apiGet(`/scenarios/${s.id}/logs?teamId=${CONFIG.teamId}&pg[limit]=1`);
       const logs = r.scenarioLogs || [];
       const lastTs = logs.length ? new Date(logs[0].timestamp).getTime() : 0;
       const ageMin = lastTs ? (Date.now() - lastTs) / 60000 : Infinity;
+      const state = scenStateById[s.id] || {};
+      const nextExec = state.nextExec ? new Date(state.nextExec).getTime() : 0;
       let status = 'ok';
       if (ageMin > s.maxAgeMin * 1.5) status = 'bad';
       else if (ageMin > s.maxAgeMin) status = 'warn';
-      // For event-type (webhook) scenarios, "no recent runs" might just mean no pay-clicks. Don't alarm.
       if (s.type === 'event' && ageMin > s.maxAgeMin) status = 'idle';
-      return { ...s, lastTs, ageMin, status };
+      return { ...s, lastTs, ageMin, status, nextExec, isActive: !!state.isActive };
     } catch (e) {
-      return { ...s, ageMin: Infinity, status: 'error', err: e.message };
+      return { ...s, ageMin: Infinity, status: 'error', err: e.message, nextExec: 0, isActive: false };
     }
   }));
 
@@ -4924,8 +4932,18 @@ async function checkScenarioHealth() {
   badCount.textContent = bad + warn;
   badCount.style.background = bad ? '#C0392B' : warn ? '#E67E22' : '#16A34A';
 
+  // Format "next run" as relative time
+  const fmtNext = (ts) => {
+    if (!ts) return '<span style="color:#999;">—</span>';
+    const minsUntil = (ts - Date.now()) / 60000;
+    if (minsUntil < 0) return `<span style="color:#C0392B;">overdue ${Math.abs(Math.round(minsUntil/60*10)/10)}hr</span>`;
+    if (minsUntil < 60) return `<span style="color:#16A34A;">in ${Math.round(minsUntil)} min</span>`;
+    if (minsUntil < 1440) return `<span style="color:#444;">in ${Math.round(minsUntil/60*10)/10}hr</span>`;
+    return `<span style="color:#444;">in ${Math.round(minsUntil/1440)}d</span>`;
+  };
+
   list.innerHTML = `<table style="width:100%;font-size:13px;"><thead><tr>
-    <th></th><th>Scenario</th><th>Type</th><th>Last run</th><th>Status</th>
+    <th></th><th>Scenario</th><th>Type</th><th>Last run</th><th>Next run</th><th>Status</th>
   </tr></thead><tbody>
     ${results.map(r => {
       const color = r.status === 'bad' ? '#C0392B' : r.status === 'warn' ? '#E67E22' : r.status === 'idle' ? '#9CA3AF' : r.status === 'error' ? '#7C3AED' : '#16A34A';
@@ -4938,10 +4956,35 @@ async function checkScenarioHealth() {
         <td><strong>${r.name}</strong><br><span style="font-size:11px;color:#888;">#${r.id}</span></td>
         <td><span style="font-size:11px;color:#888;">${r.type}</span></td>
         <td>${lastTxt}</td>
+        <td>${fmtNext(r.nextExec)}</td>
         <td style="color:${color};font-weight:600;">${statusTxt}</td>
       </tr>`;
     }).join('')}
-  </tbody></table>`;
+  </tbody></table>
+
+  <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;">
+    <h3 style="margin:0 0 10px;font-size:14px;color:#243B5A;">⏰ Upcoming in the next 24 hours</h3>
+    ${(() => {
+      const upcoming = results
+        .filter(r => r.nextExec && r.nextExec > Date.now() && r.nextExec - Date.now() < 86400000)
+        .sort((a,b) => a.nextExec - b.nextExec);
+      if (!upcoming.length) return '<div class="empty" style="padding:10px;color:#888;font-size:13px;">Nothing scheduled in the next 24 hours.</div>';
+      return `<table style="width:100%;font-size:13px;"><thead><tr>
+        <th>When</th><th>Scenario</th><th>Type</th>
+      </tr></thead><tbody>
+        ${upcoming.map(r => {
+          const dt = new Date(r.nextExec);
+          const pt = dt.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', hour: 'numeric', minute: '2-digit' });
+          const rel = fmtNext(r.nextExec);
+          return `<tr>
+            <td><strong>${pt}</strong> PT<br><span style="font-size:11px;color:#888;">${rel.replace(/<[^>]+>/g,'')}</span></td>
+            <td>${r.name} <span style="font-size:11px;color:#888;">#${r.id}</span></td>
+            <td><span style="font-size:11px;color:#888;">${r.type}</span></td>
+          </tr>`;
+        }).join('')}
+      </tbody></table>`;
+    })()}
+  </div>`;
 }
 
 // Hook into renderDashboard to load team todos + check unmatched payments
