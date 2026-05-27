@@ -4964,27 +4964,115 @@ async function checkScenarioHealth() {
 
   <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;">
     <h3 style="margin:0 0 10px;font-size:14px;color:#243B5A;">⏰ Upcoming in the next 24 hours</h3>
+    <p style="font-size:11px;color:#888;margin:0 0 10px;">Click any row to preview which leads the scenario will touch when it fires.</p>
     ${(() => {
       const upcoming = results
         .filter(r => r.nextExec && r.nextExec > Date.now() && r.nextExec - Date.now() < 86400000)
         .sort((a,b) => a.nextExec - b.nextExec);
       if (!upcoming.length) return '<div class="empty" style="padding:10px;color:#888;font-size:13px;">Nothing scheduled in the next 24 hours.</div>';
       return `<table style="width:100%;font-size:13px;"><thead><tr>
-        <th>When</th><th>Scenario</th><th>Type</th>
-      </tr></thead><tbody>
+        <th></th><th>When</th><th>Scenario</th><th>Will touch</th>
+      </tr></thead><tbody id="upcomingRows">
         ${upcoming.map(r => {
           const dt = new Date(r.nextExec);
           const pt = dt.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', weekday: 'short', hour: 'numeric', minute: '2-digit' });
-          const rel = fmtNext(r.nextExec);
-          return `<tr>
-            <td><strong>${pt}</strong> PT<br><span style="font-size:11px;color:#888;">${rel.replace(/<[^>]+>/g,'')}</span></td>
+          const matches = previewScenarioMatches(r.id);
+          const matchCount = matches.length;
+          const badge = matchCount > 0
+            ? `<span style="background:#16A34A;color:#fff;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;">${matchCount} lead${matchCount===1?'':'s'}</span>`
+            : `<span style="color:#9CA3AF;font-size:11px;">no matches now</span>`;
+          return `<tr style="cursor:pointer;" onclick="toggleScenarioPreview(${r.id}, this)" title="Click to preview">
+            <td style="width:20px;color:#888;font-size:14px;">▸</td>
+            <td><strong>${pt}</strong> PT<br><span style="font-size:11px;color:#888;">${fmtNext(r.nextExec).replace(/<[^>]+>/g,'')}</span></td>
             <td>${r.name} <span style="font-size:11px;color:#888;">#${r.id}</span></td>
-            <td><span style="font-size:11px;color:#888;">${r.type}</span></td>
-          </tr>`;
+            <td>${badge}</td>
+          </tr>
+          <tr id="preview-${r.id}" style="display:none;background:#F9FAFB;"><td colspan="4" style="padding:14px;font-size:12px;">
+            ${matchCount === 0
+              ? '<em style="color:#888;">No pending leads match this scenario\'s filter right now. (When it fires, may pick up newer leads or zero leads — that\'s OK.)</em>'
+              : `<strong style="color:#243B5A;">${matchCount} lead${matchCount===1?'':'s'} will be touched:</strong><br><br>
+                 <table style="width:100%;font-size:12px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;">
+                   <thead><tr style="background:#F3F4F6;"><th style="text-align:left;padding:6px;">Name</th><th style="text-align:left;padding:6px;">Email</th><th style="text-align:left;padding:6px;">Course</th><th style="text-align:left;padding:6px;">Age</th></tr></thead>
+                   <tbody>
+                     ${matches.slice(0, 20).map(m => {
+                       const ageHr = m.data.submitted_at ? Math.round((Date.now() - new Date(m.data.submitted_at).getTime()) / 3600000) : '?';
+                       const ageTxt = typeof ageHr === 'number' && ageHr >= 24 ? `${Math.round(ageHr/24*10)/10}d` : `${ageHr}hr`;
+                       return `<tr>
+                         <td style="padding:6px;"><strong>${escapeHtml(m.data.first_name||'')} ${escapeHtml(m.data.last_name||'')}</strong></td>
+                         <td style="padding:6px;">${escapeHtml(m.data.email||'')}</td>
+                         <td style="padding:6px;">${courseLabel(m.data.course_type)}</td>
+                         <td style="padding:6px;color:#888;">${ageTxt}</td>
+                       </tr>`;
+                     }).join('')}
+                     ${matches.length > 20 ? `<tr><td colspan="4" style="padding:6px;color:#888;font-style:italic;">+ ${matches.length - 20} more...</td></tr>` : ''}
+                   </tbody>
+                 </table>`}
+          </td></tr>`;
         }).join('')}
       </tbody></table>`;
     })()}
   </div>`;
+}
+
+// Toggle preview row expand/collapse
+function toggleScenarioPreview(scenarioId, rowEl) {
+  const preview = document.getElementById('preview-' + scenarioId);
+  if (!preview) return;
+  const isOpen = preview.style.display === 'table-row';
+  preview.style.display = isOpen ? 'none' : 'table-row';
+  const arrow = rowEl.querySelector('td');
+  if (arrow) arrow.textContent = isOpen ? '▸' : '▾';
+}
+
+// Compute which records match each scenario's filter, client-side.
+// Mirrors the Make scenario filter logic.
+function previewScenarioMatches(scenarioId) {
+  if (typeof RECORDS === 'undefined' || !RECORDS.length) return [];
+  const now = Date.now();
+  const ageHr = (r) => r.data.submitted_at ? (now - new Date(r.data.submitted_at).getTime()) / 3600000 : -1;
+  const ageDays = (r) => ageHr(r) / 24;
+  const today = new Date().toISOString().slice(0,10);
+  const tomorrow = new Date(now + 86400000).toISOString().slice(0,10);
+  const yesterday = new Date(now - 86400000).toISOString().slice(0,10);
+  const isPending = (r) => r.data.status === 'pending';
+  const isConfirmed = (r) => r.data.status === 'confirmed';
+  const flag = (r,k) => r.data[k] === 'yes';
+
+  switch (scenarioId) {
+    case 5130806: // T+2hr follow-up: pending, 2hr-7d, !nudge2_sent
+      return RECORDS.filter(r => isPending(r) && ageHr(r) >= 2 && ageHr(r) <= 168 && !flag(r,'nudge2_sent'));
+    case 5154192: // T+24hr SMS: pending, 23-25hr, !nudge_t24hr_sent
+      return RECORDS.filter(r => isPending(r) && ageHr(r) >= 23 && ageHr(r) <= 25 && !flag(r,'nudge_t24hr_sent'));
+    case 5118321: // Day 5 email COMEBACK30: pending, 5-30 days, !comeback30_sent
+      return RECORDS.filter(r => isPending(r) && ageDays(r) >= 5 && ageDays(r) <= 30 && !flag(r,'comeback30_sent'));
+    case 5154195: // Day 5 SMS: pending, 4.5-5.5 days, !nudge_d5sms_sent
+      return RECORDS.filter(r => isPending(r) && ageDays(r) >= 4.5 && ageDays(r) <= 5.5 && !flag(r,'nudge_d5sms_sent'));
+    case 5154196: // Day 7 ACLS/PALS: pending, 6.5-7.5 days, course in [acls,pals]
+      return RECORDS.filter(r => {
+        const ct = (r.data.course_type||'').toLowerCase();
+        return isPending(r) && ageDays(r) >= 6.5 && ageDays(r) <= 7.5 && (ct.includes('acls') || ct.includes('pals')) && !flag(r,'nudge_d7sms_sent');
+      });
+    case 5118287: // 24hr class reminder: confirmed, date = tomorrow
+      return RECORDS.filter(r => isConfirmed(r) && r.data.date === tomorrow);
+    case 5154146: // Roster 7 AM: confirmed, date = today
+    case 5154145: // Roster 3 PM: same
+      return RECORDS.filter(r => isConfirmed(r) && r.data.date === today);
+    case 5131291: // Post-class thank-you: confirmed, date = yesterday, !thankyou_sent
+      return RECORDS.filter(r => isConfirmed(r) && r.data.date === yesterday && !flag(r,'thankyou_sent'));
+    case 5131292: // Stale pending cleanup: pending, class date >14 days past
+      return RECORDS.filter(r => {
+        if (!isPending(r) || !r.data.date) return false;
+        const classDate = new Date(r.data.date + 'T00:00:00').getTime();
+        return (now - classDate) > 14*86400000;
+      });
+    case 5118322: // BLS Renewal Reminder
+      return []; // too course-specific to mirror cleanly
+    case 5201275: // Daily Dedup: pending records that share email with a confirmed record
+      const confirmedEmails = new Set(RECORDS.filter(isConfirmed).map(r => (r.data.email||'').toLowerCase()));
+      return RECORDS.filter(r => isPending(r) && confirmedEmails.has((r.data.email||'').toLowerCase()));
+    default:
+      return [];
+  }
 }
 
 // Hook into renderDashboard to load team todos + check unmatched payments
