@@ -1332,7 +1332,7 @@
       <div class="card" id="scenarioHealthCard" style="display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
           <h2 style="margin:0;">🔍 Scenario Health <span class="count" id="scenarioHealthBad" style="background:#9CA3AF;color:#fff;">0</span></h2>
-          <button class="btn btn-sm" onclick="checkScenarioHealth()">↻ Re-check</button>
+          <button class="btn btn-sm" onclick="checkScenarioHealth(true)">↻ Re-check</button>
         </div>
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:12px;">
           Last-fired timestamp per cadence scenario. Red = overdue. Yellow = approaching due. Green = ran on time.
@@ -4894,38 +4894,59 @@ const MONITORED_SCENARIOS = [
   { id: 5126033, name: 'Daily Health Check',               maxAgeMin: 60*26,  type: 'daily' },
 ];
 
-async function checkScenarioHealth() {
+async function checkScenarioHealth(forceRefresh) {
   const card = document.getElementById('scenarioHealthCard');
   const list = document.getElementById('scenarioHealthList');
   const badCount = document.getElementById('scenarioHealthBad');
   if (!list) return;
   card.style.display = 'block';
-  list.innerHTML = '<div class="empty" style="padding:14px;">Checking…</div>';
 
-  // One call to get all scenarios' state (nextExec, isActive) — saves N-1 calls
-  let scenStateById = {};
-  try {
-    const all = await apiGet(`/scenarios?teamId=${CONFIG.teamId}`);
-    (all.scenarios || []).forEach(s => scenStateById[s.id] = s);
-  } catch (e) { console.warn('scenarios list failed:', e); }
-
-  const results = await Promise.all(MONITORED_SCENARIOS.map(async (s) => {
+  // Cache results in sessionStorage for 2 min — prevents hammering Make API on rapid refreshes
+  const CACHE_KEY = 'scenarioHealthCache';
+  const CACHE_TTL_MS = 2 * 60 * 1000;
+  let results;
+  if (!forceRefresh) {
     try {
-      const r = await apiGet(`/scenarios/${s.id}/logs?teamId=${CONFIG.teamId}&pg[limit]=1`);
-      const logs = r.scenarioLogs || [];
-      const lastTs = logs.length ? new Date(logs[0].timestamp).getTime() : 0;
-      const ageMin = lastTs ? (Date.now() - lastTs) / 60000 : Infinity;
-      const state = scenStateById[s.id] || {};
-      const nextExec = state.nextExec ? new Date(state.nextExec).getTime() : 0;
-      let status = 'ok';
-      if (ageMin > s.maxAgeMin * 1.5) status = 'bad';
-      else if (ageMin > s.maxAgeMin) status = 'warn';
-      if (s.type === 'event' && ageMin > s.maxAgeMin) status = 'idle';
-      return { ...s, lastTs, ageMin, status, nextExec, isActive: !!state.isActive };
-    } catch (e) {
-      return { ...s, ageMin: Infinity, status: 'error', err: e.message, nextExec: 0, isActive: false };
+      const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
+      if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+        results = cached.results;
+      }
+    } catch (e) {}
+  }
+
+  if (!results) {
+    list.innerHTML = '<div class="empty" style="padding:14px;">Checking…</div>';
+    // Stagger calls: 1 list call up-front, then per-scenario logs with small delays to avoid 429
+    let scenStateById = {};
+    try {
+      const all = await apiGet(`/scenarios?teamId=${CONFIG.teamId}`);
+      (all.scenarios || []).forEach(s => scenStateById[s.id] = s);
+    } catch (e) { console.warn('scenarios list failed:', e); }
+
+    results = [];
+    for (const s of MONITORED_SCENARIOS) {
+      try {
+        const r = await apiGet(`/scenarios/${s.id}/logs?teamId=${CONFIG.teamId}&pg[limit]=1`);
+        const logs = r.scenarioLogs || [];
+        const lastTs = logs.length ? new Date(logs[0].timestamp).getTime() : 0;
+        const ageMin = lastTs ? (Date.now() - lastTs) / 60000 : Infinity;
+        const state = scenStateById[s.id] || {};
+        const nextExec = state.nextExec ? new Date(state.nextExec).getTime() : 0;
+        let status = 'ok';
+        if (ageMin > s.maxAgeMin * 1.5) status = 'bad';
+        else if (ageMin > s.maxAgeMin) status = 'warn';
+        if (s.type === 'event' && ageMin > s.maxAgeMin) status = 'idle';
+        results.push({ ...s, lastTs, ageMin, status, nextExec, isActive: !!state.isActive });
+      } catch (e) {
+        const isRateLimit = (e.message || '').includes('429');
+        results.push({ ...s, ageMin: Infinity, status: 'error', err: isRateLimit ? 'rate limit (cached results shortly)' : e.message, nextExec: 0, isActive: false });
+        if (isRateLimit) break;  // stop hammering on 429
+      }
+      // Tiny gap between calls to stay under 60 req/min
+      await new Promise(r => setTimeout(r, 80));
     }
-  }));
+    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), results })); } catch (e) {}
+  }
 
   const bad = results.filter(r => r.status === 'bad').length;
   const warn = results.filter(r => r.status === 'warn').length;
