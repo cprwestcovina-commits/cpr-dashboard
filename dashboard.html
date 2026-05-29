@@ -5381,10 +5381,9 @@ function renderQuest() {
 
   // (event ticker removed per user request)
 
-  // Lost-pit sidebar — now a fiery dungeon
-  if (lostLeads.length) {
-    // Spawn flames evenly across the bottom + skulls + drifting embers
-    const flameCount = Math.min(8, Math.max(4, Math.ceil(lostLeads.length / 2)));
+  // Dungeon of Lost Souls — always rendered (empty = decorative)
+  {
+    const flameCount = Math.min(8, Math.max(4, Math.ceil(Math.max(2, lostLeads.length) / 2)));
     const flames = Array.from({length: flameCount}).map((_, i) =>
       `<div class="dungeon-flame" style="left:${(i+1)*(100/(flameCount+1))}%;animation-delay:-${(i*0.13)%0.8}s;">🔥</div>`
     ).join('');
@@ -5394,14 +5393,25 @@ function renderQuest() {
     const embers = Array.from({length: 12}).map((_, i) =>
       `<div class="dungeon-ember" style="left:${Math.random()*100}%;--ex:${(Math.random()-0.5)*40}px;animation-delay:-${Math.random()*3}s;"></div>`
     ).join('');
+    const empty = lostLeads.length === 0;
     html += `<div class="quest-dungeon">
       ${skulls}
       ${flames}
       ${embers}
       <div class="quest-dungeon-title">🔥 DUNGEON OF LOST SOULS ×${lostLeads.length} 🔥</div>
       <div class="quest-dungeon-grid">
-        ${lostLeads.map((r, i) => `<span class="lost-soul" onclick="openEdit('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name + ' ' + r.data.last_name)} — click to revive" style="animation-delay:-${(i*0.4)%3}s;">${critterFor(r.data.email || r.key, r)}</span>`).join('')}
-        <span style="color:#FF6B00;margin-left:12px;font-family:'Press Start 2P',monospace;font-size:8px;text-shadow:0 0 4px #FF4400;">← CLICK TO REVIVE</span>
+        ${empty
+          ? `<div style="display:flex;align-items:center;gap:14px;color:#FF6B00;font-family:'Press Start 2P',monospace;font-size:10px;text-shadow:0 0 6px rgba(255,68,0,0.6);">
+               <span style="font-size:38px;filter:drop-shadow(0 0 8px rgba(255,68,0,0.7));">😴</span>
+               <div>
+                 <div>NO SOULS TRAPPED</div>
+                 <div style="font-size:8px;color:#FFB380;margin-top:6px;">Business is good — the demon sleeps</div>
+                 <div style="font-size:7px;color:#8B5A3B;margin-top:4px;">💤 z z z 💤</div>
+               </div>
+             </div>`
+          : lostLeads.map((r, i) => `<span class="lost-soul" onclick="openEdit('${escapeHtml(r.key)}')" title="${escapeHtml(r.data.first_name + ' ' + r.data.last_name)} — click to revive" style="animation-delay:-${(i*0.4)%3}s;">${critterFor(r.data.email || r.key, r)}</span>`).join('') +
+            `<span style="color:#FF6B00;margin-left:12px;font-family:'Press Start 2P',monospace;font-size:8px;text-shadow:0 0 4px #FF4400;">← CLICK TO REVIVE</span>`
+        }
       </div>
     </div>`;
   }
