@@ -628,6 +628,54 @@
     gap: 60px 50px;
     position: relative;
   }
+
+  /* === Pathways: SVG path overlay that connects all rooms in snake order === */
+  .quest-pathways {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+  }
+  .quest-pathways .path-base {
+    stroke: rgba(255, 215, 0, 0.55);  /* gold */
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 2 14;            /* dotted pebble feel */
+    fill: none;
+    filter: drop-shadow(0 0 4px rgba(255,215,0,0.4));
+  }
+  .quest-pathways .path-flow {
+    stroke: #FFD700;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 10 16;
+    fill: none;
+    animation: questPathFlow 14s linear infinite;
+  }
+  @keyframes questPathFlow {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: -260; }
+  }
+  /* Footprint sprites that walk the route */
+  .quest-walker {
+    position: absolute;
+    font-size: 22px;
+    z-index: 2;
+    pointer-events: none;
+    filter: drop-shadow(0 3px 3px rgba(0,0,0,0.4));
+    offset-path: var(--walker-path);
+    offset-rotate: 0deg;
+    animation: questWalk var(--walker-dur, 60s) linear infinite;
+    animation-delay: var(--walker-delay, 0s);
+  }
+  @keyframes questWalk {
+    from { offset-distance: 0%; }
+    to   { offset-distance: 100%; }
+  }
+  .quest-walker .walker-body { display: inline-block; animation: questWalkerBob 0.5s ease-in-out infinite; }
+  @keyframes questWalkerBob { 0%,100% { transform: translateY(0) scaleX(1); } 50% { transform: translateY(-3px) scaleX(1); } }
   /* Snake layout — row 2 is positioned right-to-left so flow snakes through */
   .quest-room { grid-row: 1; }
   .quest-room.row2 { grid-row: 2; }
@@ -978,8 +1026,9 @@
     to   { transform: translateX(-100%); }
   }
 
-  /* Connector arrows — between rooms in same row, and the vertical drop on right edge */
-  .quest-connector {
+  /* Connector arrows — REPLACED by SVG pathway, hidden */
+  .quest-connector { display: none !important; }
+  .quest-connector-old {
     position: absolute;
     color: #FFEB3B;
     text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
@@ -5526,6 +5575,7 @@ function enhanceQuestVisuals(leads, byStage) {
   buildXPBar(host, leads);
   ensureCarolinePlayer(host);
   updateWorldLevel(leads);
+  buildPathways(host);
 
   // Catch up on events that happened while dashboard was closed
   runCatchupReplayIfNeeded(host, leads, byStage);
@@ -6071,6 +6121,74 @@ function updateWorldLevel(leads) {
   const b = document.getElementById('questWorldLabelInline');
   if (a) a.textContent = w;
   if (b) b.textContent = 'World ' + w;
+}
+
+// === Pathways: SVG snake-route connecting all 10 rooms + walking avatars ===
+function buildPathways(host) {
+  const grid = host.querySelector('.quest-grid');
+  if (!grid) return;
+  // Remove old layer if it exists (so we re-draw on resize)
+  const old = grid.querySelector('.quest-pathways');
+  if (old) old.remove();
+
+  // Build SVG path snaking through the 10 rooms in journey order.
+  // Snake: top row L→R (rooms 1-5), drop down on right edge, bottom row R→L (rooms 6-10).
+  // Coordinates in % of grid. Rooms positioned ~10/30/50/70/90% x · 22/65% y.
+  const xs = [10, 30, 50, 70, 90];
+  const yTop = 25, yBot = 65;
+  const points = [];
+  for (let i = 0; i < 5; i++) points.push([xs[i], yTop]);             // top L→R
+  points.push([xs[4] + 4, yTop + 4]);                                   // start descent
+  points.push([xs[4] + 4, yBot - 4]);                                   // arrive bottom right
+  for (let i = 4; i >= 0; i--) points.push([xs[i], yBot]);             // bottom R→L
+
+  // Build path d= string using percentages — but SVG % requires viewBox coords. Use absolute units instead.
+  // Easier: percentages in path via "M x% y%" only work in some browsers — use viewBox [0..100, 0..100] and plain numbers.
+  const pathD = points.map((p, i) => (i === 0 ? `M ${p[0]} ${p[1]}` : `L ${p[0]} ${p[1]}`)).join(' ');
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'quest-pathways');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  const base = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  base.setAttribute('class', 'path-base');
+  base.setAttribute('d', pathD);
+  // Stroke widths look distorted when viewBox is 0-100 stretched to grid dims. Use vector-effect to keep stroke crisp.
+  base.setAttribute('vector-effect', 'non-scaling-stroke');
+  svg.appendChild(base);
+
+  const flow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  flow.setAttribute('class', 'path-flow');
+  flow.setAttribute('d', pathD);
+  flow.setAttribute('vector-effect', 'non-scaling-stroke');
+  svg.appendChild(flow);
+
+  grid.appendChild(svg);
+
+  // Walking avatars — 3 little travelers strolling the path
+  // CSS offset-path uses SVG path syntax — convert the % coords above to a px-coord path using grid box.
+  const rect = grid.getBoundingClientRect();
+  const w = rect.width || 800;
+  const h = rect.height || 360;
+  const pxPath = points.map((p, i) => {
+    const x = (p[0] / 100) * w;
+    const y = (p[1] / 100) * h;
+    return (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`);
+  }).join(' ');
+
+  // Remove old walkers
+  grid.querySelectorAll('.quest-walker').forEach(el => el.remove());
+  const walkerEmojis = ['🚶', '🚶‍♀️', '🏃'];
+  walkerEmojis.forEach((emoji, i) => {
+    const w = document.createElement('div');
+    w.className = 'quest-walker';
+    w.innerHTML = `<span class="walker-body">${emoji}</span>`;
+    w.style.setProperty('--walker-path', `path("${pxPath}")`);
+    w.style.setProperty('--walker-dur', `${50 + i * 18}s`);
+    w.style.setProperty('--walker-delay', `${-i * 18}s`);
+    grid.appendChild(w);
+  });
 }
 
 // Caroline — the player character roaming the board
