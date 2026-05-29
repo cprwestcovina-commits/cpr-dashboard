@@ -6036,12 +6036,21 @@ function playCatchup(host, events, overflow, done) {
       eventEl.innerHTML = `💰 <strong style="color:#FFD700;">${fname}</strong> paid · ${ct}`;
       spawnCoinBurst(host);
       flashRoom('PAID');
+      // Walk from previous stage → PAID room (index 6)
+      const fromIdx = QUEST_STAGES.findIndex(s => s.key === (ev.lead.data.lead_stage || 'new').toLowerCase());
+      spawnQuestWalker(fromIdx >= 0 ? fromIdx : 0, 6, '💰');
     } else if (ev.type === 'new') {
       eventEl.innerHTML = `🆕 New lead: <strong>${fname}</strong> · ${ct}`;
       flashRoom('NEW');
+      // Pulse-walk at NEW
+      spawnQuestWalker(0, 0, '🆕');
     } else if (ev.type === 'stage') {
       eventEl.innerHTML = `➜ <strong>${fname}</strong>: ${ev.from || 'new'} → <strong style="color:#7AB8FF;">${ev.to || '?'}</strong>`;
       flashRoom(ev.to || '');
+      // Walker animation between stages
+      const fromIdx = QUEST_STAGES.findIndex(s => s.key === (ev.from || 'new').toLowerCase());
+      const toIdx = QUEST_STAGES.findIndex(s => s.key === (ev.to || '').toLowerCase());
+      if (fromIdx >= 0 && toIdx >= 0) spawnQuestWalker(fromIdx, toIdx, '🚶');
     } else if (ev.type === 'lost') {
       eventEl.innerHTML = `☠ <strong style="color:#FF4400;">${fname}</strong> lost`;
       flashRoom('DUNGEON');
@@ -6215,17 +6224,66 @@ function buildPathways(host) {
 
   grid.appendChild(svg);
 
-  // Walking avatars travel along this path
-  const walkerEmojis = ['🚶', '🚶‍♀️', '🏃'];
-  walkerEmojis.forEach((emoji, i) => {
-    const w = document.createElement('div');
-    w.className = 'quest-walker';
-    w.innerHTML = `<span class="walker-body">${emoji}</span>`;
-    w.style.setProperty('--walker-path', `path("${pathD}")`);
-    w.style.setProperty('--walker-dur', `${55 + i * 22}s`);
-    w.style.setProperty('--walker-delay', `${-i * 18}s`);
-    grid.appendChild(w);
-  });
+  // Compute per-stage position-along-path so transition walkers can animate the right segment.
+  // Total path length and per-room position percentages.
+  try {
+    const tmpPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    tmpPath.setAttribute('d', pathD);
+    const total = tmpPath.getTotalLength ? tmpPath.getTotalLength.call(tmpPath) : 1;
+    // Use the topRow + botRow centers we computed as anchor points. Each room corresponds to a point on the path.
+    const stagePoints = [...topRow.map(r => ({x: r.x, y: r.y})), ...botRow.map(r => ({x: r.x, y: r.y}))];
+    // For each stage point, walk along the SVG path until we find the closest sample point. Cheap loop.
+    const stagePcts = stagePoints.map(sp => {
+      let bestPct = 0, bestDist = Infinity;
+      for (let p = 0; p <= 1; p += 0.005) {
+        const pt = tmpPath.getPointAtLength ? tmpPath.getPointAtLength(p * total) : null;
+        if (!pt) break;
+        const dx = pt.x - sp.x, dy = pt.y - sp.y;
+        const d = dx*dx + dy*dy;
+        if (d < bestDist) { bestDist = d; bestPct = p; }
+      }
+      return bestPct;
+    });
+    // Store globally so spawnQuestWalker() can use them
+    QUEST_STATE.pathD = pathD;
+    QUEST_STATE.stagePcts = stagePcts;
+    QUEST_STATE.gridEl = grid;
+  } catch(e) { console.warn('pathway anchor calc failed:', e); }
+}
+
+// Spawn a single walker that travels from one stage's position on the path to another, then fades.
+// fromIdx, toIdx are indices into QUEST_STAGES (0=NEW, 9=CERTIFIED).
+function spawnQuestWalker(fromIdx, toIdx, emoji) {
+  const grid = QUEST_STATE.gridEl;
+  const pcts = QUEST_STATE.stagePcts;
+  const pathD = QUEST_STATE.pathD;
+  if (!grid || !pcts || !pathD) return;
+  if (fromIdx === undefined || toIdx === undefined) return;
+  fromIdx = Math.max(0, Math.min(pcts.length - 1, fromIdx));
+  toIdx = Math.max(0, Math.min(pcts.length - 1, toIdx));
+  const fromPct = pcts[fromIdx] * 100;
+  const toPct = pcts[toIdx] * 100;
+  const span = Math.abs(toPct - fromPct);
+  const dur = Math.max(1.2, span / 100 * 4);  // 4s for full path
+  const w = document.createElement('div');
+  w.className = 'quest-walker quest-walker-transit';
+  w.innerHTML = `<span class="walker-body">${emoji || '🚶'}</span>`;
+  w.style.setProperty('--walker-path', `path("${pathD}")`);
+  w.style.animation = 'none';
+  w.style.offsetDistance = fromPct + '%';
+  w.style.opacity = '0';
+  grid.appendChild(w);
+  // Force a reflow then animate
+  // eslint-disable-next-line no-unused-expressions
+  w.offsetHeight;
+  w.style.transition = `offset-distance ${dur}s linear, opacity 0.3s ease`;
+  w.style.opacity = '1';
+  w.style.offsetDistance = toPct + '%';
+  // Remove after arrival
+  setTimeout(() => {
+    w.style.opacity = '0';
+    setTimeout(() => w.remove(), 400);
+  }, dur * 1000 + 200);
 }
 
 // Caroline — the player character roaming the board
