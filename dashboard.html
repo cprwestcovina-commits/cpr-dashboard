@@ -6123,69 +6123,106 @@ function updateWorldLevel(leads) {
   if (b) b.textContent = 'World ' + w;
 }
 
-// === Pathways: SVG snake-route connecting all 10 rooms + walking avatars ===
+// === Pathways: snake-route through the GAPS between rooms + walking avatars ===
 function buildPathways(host) {
   const grid = host.querySelector('.quest-grid');
   if (!grid) return;
-  // Remove old layer if it exists (so we re-draw on resize)
   const old = grid.querySelector('.quest-pathways');
   if (old) old.remove();
+  grid.querySelectorAll('.quest-walker').forEach(el => el.remove());
 
-  // Build SVG path snaking through the 10 rooms in journey order.
-  // Snake: top row L→R (rooms 1-5), drop down on right edge, bottom row R→L (rooms 6-10).
-  // Coordinates in % of grid. Rooms positioned ~10/30/50/70/90% x · 22/65% y.
-  const xs = [10, 30, 50, 70, 90];
-  const yTop = 25, yBot = 65;
+  const rooms = Array.from(grid.querySelectorAll('.quest-room'));
+  if (rooms.length < 10) return;
+
+  // Map rooms by their col-N + row class. Top row (no .row2) at col 1-5; bottom row (.row2) at col 5-1 visually but journey order col 5→1.
+  const gridRect = grid.getBoundingClientRect();
+  const topRow = [], botRow = [];
+  rooms.forEach(r => {
+    const isBot = r.classList.contains('row2');
+    const colMatch = (r.className.match(/col-(\d)/) || [])[1];
+    if (!colMatch) return;
+    const col = parseInt(colMatch);
+    const rect = r.getBoundingClientRect();
+    const center = {
+      x: rect.left - gridRect.left + rect.width / 2,
+      y: rect.top - gridRect.top + rect.height / 2,
+      right: rect.right - gridRect.left,
+      left: rect.left - gridRect.left,
+      top: rect.top - gridRect.top,
+      bottom: rect.bottom - gridRect.top,
+      col,
+    };
+    (isBot ? botRow : topRow).push(center);
+  });
+  topRow.sort((a,b) => a.col - b.col);    // journey 1-5
+  botRow.sort((a,b) => b.col - a.col);    // journey 6-10 (col 5→1)
+
+  // Build the journey path: along the GAPS between rooms.
+  // Strategy:
+  //  - between two top-row rooms, path runs at row midline at the inter-column gap
+  //  - drop-down on the far right (after last top room) through the inter-row gap
+  //  - bottom row mirrors top
+  const topY = (topRow[0].bottom + (botRow[0]?.top || topRow[0].bottom + 60)) / 2 - 30; // mid of inter-row gap, biased up
+  const botY = (topRow[0].bottom + (botRow[0]?.top || topRow[0].bottom + 60)) / 2 + 30; // mid of inter-row gap, biased down
+  // Actually just use mid for both rows since the path runs between them
+  const midY = (topRow[0].bottom + (botRow[0]?.top || topRow[0].bottom + 60)) / 2;
+
   const points = [];
-  for (let i = 0; i < 5; i++) points.push([xs[i], yTop]);             // top L→R
-  points.push([xs[4] + 4, yTop + 4]);                                   // start descent
-  points.push([xs[4] + 4, yBot - 4]);                                   // arrive bottom right
-  for (let i = 4; i >= 0; i--) points.push([xs[i], yBot]);             // bottom R→L
+  // Top row: leave each room from the bottom and travel to next room's bottom along midY
+  topRow.forEach((r, i) => {
+    points.push([r.x, r.bottom + 8]);    // exit bottom of room
+    points.push([r.x, midY]);             // come down to highway
+    if (i < topRow.length - 1) {
+      points.push([topRow[i+1].x, midY]); // travel along midY to next room's column
+    }
+  });
+  // Bottom row: enter each room from top
+  botRow.forEach((r, i) => {
+    if (i === 0) {
+      // already at midY at last top column; descend further then go right (we're at last top col x = botRow[0].x)
+      points.push([r.x, midY]);
+    } else {
+      points.push([r.x, midY]);
+    }
+    points.push([r.x, r.top - 8]);  // approach top of room
+    points.push([r.x, r.y]);         // enter room
+    if (i < botRow.length - 1) {
+      points.push([r.x, r.top - 8]); // come back up
+      points.push([r.x, midY]);
+      points.push([botRow[i+1].x, midY]);
+    }
+  });
 
-  // Build path d= string using percentages — but SVG % requires viewBox coords. Use absolute units instead.
-  // Easier: percentages in path via "M x% y%" only work in some browsers — use viewBox [0..100, 0..100] and plain numbers.
   const pathD = points.map((p, i) => (i === 0 ? `M ${p[0]} ${p[1]}` : `L ${p[0]} ${p[1]}`)).join(' ');
 
+  // SVG sized to actual grid pixels
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'quest-pathways');
-  svg.setAttribute('viewBox', '0 0 100 100');
-  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('width', gridRect.width);
+  svg.setAttribute('height', gridRect.height);
+  svg.style.width = '100%';
+  svg.style.height = '100%';
 
   const base = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   base.setAttribute('class', 'path-base');
   base.setAttribute('d', pathD);
-  // Stroke widths look distorted when viewBox is 0-100 stretched to grid dims. Use vector-effect to keep stroke crisp.
-  base.setAttribute('vector-effect', 'non-scaling-stroke');
   svg.appendChild(base);
 
   const flow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
   flow.setAttribute('class', 'path-flow');
   flow.setAttribute('d', pathD);
-  flow.setAttribute('vector-effect', 'non-scaling-stroke');
   svg.appendChild(flow);
 
   grid.appendChild(svg);
 
-  // Walking avatars — 3 little travelers strolling the path
-  // CSS offset-path uses SVG path syntax — convert the % coords above to a px-coord path using grid box.
-  const rect = grid.getBoundingClientRect();
-  const w = rect.width || 800;
-  const h = rect.height || 360;
-  const pxPath = points.map((p, i) => {
-    const x = (p[0] / 100) * w;
-    const y = (p[1] / 100) * h;
-    return (i === 0 ? `M ${x} ${y}` : `L ${x} ${y}`);
-  }).join(' ');
-
-  // Remove old walkers
-  grid.querySelectorAll('.quest-walker').forEach(el => el.remove());
+  // Walking avatars travel along this path
   const walkerEmojis = ['🚶', '🚶‍♀️', '🏃'];
   walkerEmojis.forEach((emoji, i) => {
     const w = document.createElement('div');
     w.className = 'quest-walker';
     w.innerHTML = `<span class="walker-body">${emoji}</span>`;
-    w.style.setProperty('--walker-path', `path("${pxPath}")`);
-    w.style.setProperty('--walker-dur', `${50 + i * 18}s`);
+    w.style.setProperty('--walker-path', `path("${pathD}")`);
+    w.style.setProperty('--walker-dur', `${55 + i * 22}s`);
     w.style.setProperty('--walker-delay', `${-i * 18}s`);
     grid.appendChild(w);
   });
