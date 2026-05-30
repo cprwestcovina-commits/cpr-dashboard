@@ -1552,6 +1552,9 @@
           <input type="text" class="search-input" id="studentSearch" placeholder="Search by name, email, or phone…" oninput="renderStudents()" />
           <div class="filter-chip active" data-filter="all" onclick="setStudentFilter('all')">All</div>
           <div class="filter-chip" data-filter="bls" onclick="setStudentFilter('bls')">BLS</div>
+          <div class="filter-chip" data-filter="heartsaver" onclick="setStudentFilter('heartsaver')">Heartsaver</div>
+          <div class="filter-chip" data-filter="acls" onclick="setStudentFilter('acls')">ACLS</div>
+          <div class="filter-chip" data-filter="pals" onclick="setStudentFilter('pals')">PALS</div>
           <div class="filter-chip" data-filter="renewal" onclick="setStudentFilter('renewal')">Renewal</div>
         </div>
         <div id="studentsList"></div>
@@ -1978,6 +1981,22 @@ function fmtDate(dateStr) {
 function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Normalize any course_type value into one of: bls | heartsaver | acls | pals | renewal
+function courseKey(t) {
+  const ct = (t || '').replace(/^aha_/, '').toLowerCase();
+  if (ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') return 'renewal';
+  if (ct === 'heartsaver' || ct === 'hs') return 'heartsaver';
+  if (ct === 'acls') return 'acls';
+  if (ct === 'pals') return 'pals';
+  return 'bls';
+}
+const COURSE_KEYS = [
+  { key: 'bls', label: 'BLS' },
+  { key: 'heartsaver', label: 'Heartsaver' },
+  { key: 'acls', label: 'ACLS' },
+  { key: 'pals', label: 'PALS' },
+  { key: 'renewal', label: 'Renewal' },
+];
 function courseLabel(t) {
   const ct = (t || '').replace(/^aha_/, '').toLowerCase();
   if (ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') return '<span class="pill renewal">RENEWAL</span>';
@@ -2502,6 +2521,16 @@ function renderRevenue() {
   const firstRev = firstList.reduce((s,r)=>s+amountFor(r),0);
   const rnwRev = rnwList.reduce((s,r)=>s+amountFor(r),0);
   const totalThis = firstList.length + rnwList.length || 1;
+  // By-course breakdown (BLS / Heartsaver / ACLS / PALS) — actual paid amounts
+  const byCourse = { bls:{n:0,rev:0}, heartsaver:{n:0,rev:0}, acls:{n:0,rev:0}, pals:{n:0,rev:0} };
+  thisMonth.forEach(r => { const k = courseKey(r.data.course_type); if (byCourse[k]) { byCourse[k].n++; byCourse[k].rev += amountFor(r); } });
+  const maxCourse = Math.max(1, ...Object.values(byCourse).map(c => c.n));
+  const courseRows = [['bls','BLS'],['heartsaver','Heartsaver'],['acls','ACLS'],['pals','PALS']].map(([k,lbl]) => `
+    <div class="bar-row">
+      <div class="bar-label">${lbl}</div>
+      <div class="bar"><div class="bar-fill" style="width:${100 * byCourse[k].n / maxCourse}%;"></div></div>
+      <div class="bar-val">${byCourse[k].n} · $${Math.round(byCourse[k].rev).toLocaleString()}</div>
+    </div>`).join('');
   document.getElementById('courseBreakdown').innerHTML = `
     <div class="bar-row">
       <div class="bar-label">First-time</div>
@@ -2512,7 +2541,9 @@ function renderRevenue() {
       <div class="bar-label">Renewal</div>
       <div class="bar"><div class="bar-fill renewal" style="width:${100 * rnwList.length / totalThis}%;"></div></div>
       <div class="bar-val">${rnwList.length} · $${rnwRev.toLocaleString()}</div>
-    </div>`;
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 6px;">By Course</div>
+    ${courseRows}`;
 
   // Funnel
   const paid = REC.filter(r => r.data.status === 'confirmed').length;
@@ -2550,8 +2581,7 @@ function setStudentFilter(f) {
 function renderStudents() {
   const q = (document.getElementById('studentSearch')?.value || '').toLowerCase();
   let rows = RECORDS;
-  if (studentFilter === 'bls') rows = rows.filter(r => r.data.course_type !== 'renewal');
-  if (studentFilter === 'renewal') rows = rows.filter(r => r.data.course_type === 'renewal');
+  if (studentFilter && studentFilter !== 'all') rows = rows.filter(r => courseKey(r.data.course_type) === studentFilter);
   if (q) rows = rows.filter(r =>
     (r.data.first_name + ' ' + r.data.last_name).toLowerCase().includes(q) ||
     (r.data.email || '').toLowerCase().includes(q) ||
