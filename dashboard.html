@@ -4526,7 +4526,7 @@ function annotateCalendarCapacity() {
   const cap = CONFIG.seatCapacityPerSlot || 12;
   // Walk records, group by date+time
   const slotCounts = {};
-  RECORDS.filter(r => r.data.status === 'confirmed').forEach(r => {
+  RECORDS.filter(r => r.data.status === 'confirmed' && r.data.source !== 'historical_import').forEach(r => {
     const k = r.data.date + '|' + (r.data.time_label || '?');
     slotCounts[k] = (slotCounts[k] || 0) + 1;
   });
