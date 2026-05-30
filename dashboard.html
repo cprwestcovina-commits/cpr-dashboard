@@ -3256,34 +3256,40 @@ const RENEWAL_TOUCHES = [
   { days: 0,  flag: 'renewal_t0_sent'  },
 ];
 
-// Build the cadence progress strip + a plain-English "next touch" summary
+// Build the cadence progress strip + a plain-English "next touch" summary.
+// A milestone is "reached" once days-until-expiry drops to/below it. The system sends the
+// MOST-RECENT reached milestone and marks older unsent ones as skipped (no backdated blast).
 function renewalCadenceStrip(r) {
   const days = r.daysUntil;
-  let nextTouch = null;
+  // Reached & not-yet-handled (neither sent nor skipped) milestone = the one the cron will fire next
+  const reachedUnsent = RENEWAL_TOUCHES.filter(t => t.days >= days && !r.data[t.flag]);
+  const current = reachedUnsent.length ? reachedUnsent[reachedUnsent.length - 1] : null; // smallest day
   const pills = RENEWAL_TOUCHES.map(t => {
-    const sent = r.data[t.flag] === 'yes';
+    const v = r.data[t.flag];
     const label = t.days === 0 ? 'Day' : t.days;
-    let bg, color, title;
-    if (sent) {
-      bg = '#DCFCE7'; color = '#15803D'; title = `${t.days}-day touch sent`;
-    } else if (days <= t.days + 1) {
-      // window reached but not yet sent → due now (first such = next)
-      if (!nextTouch) nextTouch = t;
-      bg = '#FEF3C7'; color = '#92400E'; title = `${t.days}-day touch due`;
+    let bg, color, title, mark = '';
+    if (v === 'yes') {
+      bg = '#DCFCE7'; color = '#15803D'; title = `${t.days}-day touch sent`; mark = '✓';
+    } else if (v === 'skipped') {
+      bg = '#F3F4F6'; color = '#9CA3AF'; title = `${t.days}-day window passed before launch — skipped`; mark = '–';
+    } else if (current && t.days === current.days) {
+      bg = '#FEF3C7'; color = '#92400E'; title = `${t.days}-day touch due now`;
+    } else if (t.days >= days) {
+      // reached but not the current one → will be marked skipped on next run
+      bg = '#FEE2E2'; color = '#B91C1C'; title = `${t.days}-day window passed — will skip`; mark = '–';
     } else {
       bg = '#F3F4F6'; color = '#9CA3AF'; title = `${t.days}-day touch upcoming`;
     }
-    return `<span title="${title}" style="background:${bg};color:${color};font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;min-width:20px;text-align:center;">${sent ? '✓' : ''}${label}</span>`;
+    return `<span title="${title}" style="background:${bg};color:${color};font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;min-width:20px;text-align:center;">${mark}${label}</span>`;
   }).join('');
-  // If no touch is "due", find the next upcoming one
-  if (!nextTouch) nextTouch = RENEWAL_TOUCHES.find(t => r.data[t.flag] !== 'yes' && days > t.days + 1) || null;
+  const anySent = RENEWAL_TOUCHES.some(t => r.data[t.flag] === 'yes');
   let nextTxt;
-  if (!nextTouch) {
-    nextTxt = '✓ All 6 touches sent';
-  } else if (days <= nextTouch.days + 1) {
-    nextTxt = `⏳ Next: ${nextTouch.days === 0 ? 'Day-of' : nextTouch.days + '-day'} email + text — <strong>due now</strong>`;
+  if (current) {
+    nextTxt = `⏳ Next: ${current.days === 0 ? 'Day-of' : current.days + '-day'} email + text — <strong>due now</strong>`;
   } else {
-    nextTxt = `Next: ${nextTouch.days === 0 ? 'Day-of' : nextTouch.days + '-day'} email + text in ~${days - nextTouch.days}d`;
+    const upcoming = [...RENEWAL_TOUCHES].reverse().find(t => t.days < days && r.data[t.flag] !== 'yes');
+    nextTxt = upcoming ? `Next: ${upcoming.days === 0 ? 'Day-of' : upcoming.days + '-day'} email + text in ~${days - upcoming.days}d`
+      : (anySent ? '✓ All touches sent' : 'No touches scheduled');
   }
   return `<div style="display:flex;gap:3px;margin:6px 0 4px;">${pills}</div>
     <div style="font-size:10px;color:var(--gray-600);">${nextTxt}</div>`;

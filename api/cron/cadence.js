@@ -22,7 +22,8 @@ const T2HR_HOOK = 'https://hook.us2.make.com/qnq2sx9vj7t6csh97lsdovav9j98jz7a';
 const D5_EMAIL_HOOK = 'https://hook.us2.make.com/oxlc4vhndmrcj8x95cdoxje83akkhoih';
 const RENEWAL_HOOK = 'https://hook.us2.make.com/zshj7d7mbz2y5glqxo3mka3w2q9irlms';
 const RENEWAL_CADENCE_HOOK = 'https://hook.us2.make.com/lpatwdhpp1aprx4h5gqi4hv1xdjiy5mc';
-const RENEWAL_DAILY_CAP = 0;    // PAUSED past-due outreach until approved
+const RENEWAL_DAILY_CAP = 0;    // PAUSED past-due (already-expired) outreach until approved
+const RENEWAL_CADENCE_CAP = 50; // upcoming-renewal cadence: max students contacted per day, closest-to-expiry first
 // Upcoming-renewal touch days (before expiration). Tolerance: each lead matches if days_until ∈ [target-1, target+1].
 const RENEWAL_TOUCHES = [
   { days: 90, flag: 'renewal_t90_sent' },
@@ -45,6 +46,43 @@ function courseLabel(ct) {
   if (c === 'pals') return 'PALS';
   return 'BLS';
 }
+// Build all the renewal-email fields in JS so the Make template stays a dumb fill-in-the-blank
+// (no switch/if formulas in Make → nothing to corrupt). `days` is the touch milestone.
+function renewalEmailFields(courseType, days, firstName) {
+  const c = (courseType || 'bls').toLowerCase().replace(/^aha_/, '');
+  const isHS   = c === 'heartsaver' || c === 'hs';
+  const isACLS = c === 'acls';
+  const isPALS = c === 'pals';
+  const courseShort = isHS ? 'Heartsaver' : isACLS ? 'ACLS' : isPALS ? 'PALS' : 'BLS';
+  const courseName  = isHS ? 'Heartsaver First Aid CPR AED' : isACLS ? 'ACLS' : isPALS ? 'PALS' : 'BLS Provider';
+  const bookUrl = isHS ? 'https://cpr-dashboard-cprwc.vercel.app/heartsaver.html'
+    : isACLS ? 'https://cpr-dashboard-cprwc.vercel.app/acls.html'
+    : isPALS ? 'https://cpr-dashboard-cprwc.vercel.app/pals.html'
+    : 'https://cprwestcovina-commits.github.io/bls-booking/bls-renewal.html';
+  const price = (isHS) ? '$98' : (isACLS || isPALS) ? '$250' : '$89';
+  const fn = firstName || 'there';
+  const headlineByDay = {
+    90: `Hey ${fn}, 3 months out`, 60: `Hey ${fn}, 2 months out`, 30: `Hey ${fn}, 1 month out`,
+    15: `Hey ${fn}, 2 weeks left`, 7: `Hey ${fn}, 1 week left`, 0: `Hey ${fn}, today's the day`,
+  };
+  const subheadByDay = {
+    90: `Heads up — your ${courseShort} certification expires in about 3 months. Plenty of time to lock it in early.`,
+    60: `Two months until your ${courseShort} certification expires. Easy to grab a renewal slot now while there's flexibility.`,
+    30: `One month until your ${courseShort} certification lapses. Pick a date this month and you're set.`,
+    15: `Two weeks until your ${courseShort} expires. Don't let it lapse.`,
+    7:  `One week to renew your ${courseShort}. After this, you'll be uncertified.`,
+    0:  `Your ${courseShort} expires today. Renew now to stay current.`,
+  };
+  return {
+    course_name: courseName,
+    headline: headlineByDay[days] || `Hey ${fn}, time to renew`,
+    subhead: subheadByDay[days] || `Time to renew your ${courseShort}.`,
+    book_url: bookUrl,
+    cta_label: days === 0 ? `Renew Today — ${price}` : `Pick a Date — ${price}`,
+    subject: days === 0 ? `${fn}, your ${courseShort} expires TODAY` : `${fn}, renew your ${courseShort} before it expires`,
+  };
+}
+
 function normPhone(p) {
   const digits = (p || '').replace(/\D/g, '');
   if (!digits) return null;
@@ -280,53 +318,65 @@ export default async function handler(req, res) {
     if (!ex || r.data.date > ex.data.date) anchorByEmail.set(k, r);
   }
   const confirmedAll = [...anchorByEmail.values()];
-  for (const lead of confirmedAll) {
+  // Build the in-window list (0–90 days to expiry, not yet expired), CLOSEST-TO-EXPIRY FIRST.
+  const inWindow = confirmedAll
+    .map(lead => {
+      const expiresMs = new Date(lead.data.date + 'T00:00:00').getTime() + (2 * 365.25 * 86400000);
+      return { lead, expiresMs, du: Math.round((expiresMs - Date.now()) / 86400000) };
+    })
+    .filter(x => x.du >= 0 && x.du <= 90)
+    .sort((a, b) => a.du - b.du);   // soonest expiry first
+  // Run once daily (16:00 UTC window) and cap per day so the initial backlog rolls out closest-first.
+  summary.renewalWindowTotal = inWindow.length;
+  let cadenceSent = 0;
+  for (const { lead, expiresMs, du } of (doRenewalToday ? inWindow : [])) {
+    if (cadenceSent >= RENEWAL_CADENCE_CAP) { summary.renewalCadenceCapped = true; break; }
     const d = lead.data;
-    const classDate = new Date(d.date + 'T00:00:00').getTime();
-    const expiresMs = classDate + (2 * 365.25 * 86400000);  // 2 years after class
-    const daysUntilExpiry = Math.round((expiresMs - Date.now()) / 86400000);
-    // Match each touch window (target±1 day tolerance)
-    for (const touch of RENEWAL_TOUCHES) {
-      if (Math.abs(daysUntilExpiry - touch.days) > 1) continue;
-      if (d[touch.flag] === 'yes') continue;
-      const expiresDate = new Date(expiresMs);
-      const expiresLabel = expiresDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-      const payload = {
-        first_name: d.first_name || 'there',
-        last_name: d.last_name || '',
-        email: d.email || '',
-        phone: d.phone || '',
-        course_type: (d.course_type || 'bls').toLowerCase(),
-        last_class_date: d.date_formatted || d.date,
-        expires_label: expiresLabel,
-        days_until: String(touch.days),
-      };
-      // Email via renewal cadence webhook
-      let emailOk = false;
-      if (payload.email) {
-        emailOk = await fireWebhook(RENEWAL_CADENCE_HOOK, payload);
-        if (emailOk) summary.renewalCadenceEmail++;
-        else { summary.renewalEmailFail++; summary.errors.push(`renewal-email T-${touch.days} ${payload.email}`); }
-      }
-      // SMS via GHL direct — skips gracefully if the contact opted out (STOP/DND)
-      let smsOk = false, smsOptout = false;
-      if (payload.phone) {
-        const courseShort = courseLabel(payload.course_type);
-        const msg = touch.days === 0
-          ? `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires today — renew now to stay current: https://cprwestcovina.com  Use code 30BEATS for $30 off. STOP to opt out.`
-          : `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires in ${touch.days} days. Want to lock in a renewal slot? Use code 30BEATS for $30 off. Call (626) 605-2067 or reply YES. STOP to opt out.`;
-        const r = await sendSmsIfAllowed(payload, msg);
-        if (r === 'sent') { smsOk = true; summary.renewalCadenceSMS++; }
-        else if (r === 'optout') { smsOptout = true; summary.renewalSmsOptout = (summary.renewalSmsOptout||0) + 1; }
-        else { summary.renewalSmsFail++; summary.errors.push(`renewal-sms T-${touch.days} ${payload.phone} (send failed)`); }
-      }
-      // Mark the touch done if a channel succeeded. If the only channel was SMS and they opted out
-      // (no email to fall back on), mark done anyway so we don't retry a blocked number forever.
-      if (emailOk || smsOk || (smsOptout && !payload.email)) {
-        await patchFlag(lead.key, d, { [touch.flag]: 'yes' });
-      }
-      break;  // only process one touch per lead per cron tick
+    // Milestones already reached (days-to-expiry has dropped to/below them) and not yet handled.
+    // Flag values: 'yes' = sent, 'skipped' = window passed before launch (don't backdate-blast).
+    const reachedUnsent = RENEWAL_TOUCHES.filter(t => t.days >= du && !d[t.flag]);
+    if (!reachedUnsent.length) continue;
+    const touch = reachedUnsent[reachedUnsent.length - 1];            // smallest day = most recent
+    const olderSkips = reachedUnsent.slice(0, reachedUnsent.length - 1); // earlier missed → mark skipped
+    const expiresLabel = new Date(expiresMs).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    const payload = {
+      first_name: d.first_name || 'there',
+      last_name: d.last_name || '',
+      email: d.email || '',
+      phone: d.phone || '',
+      course_type: (d.course_type || 'bls').toLowerCase(),
+      last_class_date: d.date_formatted || d.date,
+      expires_label: expiresLabel,
+      days_until: String(touch.days),
+      // Flat pre-rendered fields → Make template has zero formulas
+      ...renewalEmailFields(d.course_type, touch.days, d.first_name),
+    };
+    // Email via renewal cadence webhook
+    let emailOk = false;
+    if (payload.email) {
+      emailOk = await fireWebhook(RENEWAL_CADENCE_HOOK, payload);
+      if (emailOk) summary.renewalCadenceEmail++;
+      else { summary.renewalEmailFail++; summary.errors.push(`renewal-email T-${touch.days} ${payload.email}`); }
     }
+    // SMS via GHL direct — skips gracefully if the contact opted out (STOP/DND)
+    let smsOk = false, smsOptout = false;
+    if (payload.phone) {
+      const courseShort = courseLabel(payload.course_type);
+      const msg = touch.days === 0
+        ? `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires today — renew now to stay current: https://cprwestcovina.com  Use code 30BEATS for $30 off. STOP to opt out.`
+        : `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires in ${touch.days} days. Want to lock in a renewal slot? Use code 30BEATS for $30 off. Call (626) 605-2067 or reply YES. STOP to opt out.`;
+      const r = await sendSmsIfAllowed(payload, msg);
+      if (r === 'sent') { smsOk = true; summary.renewalCadenceSMS++; }
+      else if (r === 'optout') { smsOptout = true; summary.renewalSmsOptout = (summary.renewalSmsOptout||0) + 1; }
+      else { summary.renewalSmsFail++; summary.errors.push(`renewal-sms T-${touch.days} ${payload.phone} (send failed)`); }
+    }
+    // Always retire the older missed windows so we never backdate-blast them. Mark the current
+    // touch 'yes' only if a channel landed (or SMS opt-out with no email to fall back on).
+    const additions = {};
+    olderSkips.forEach(t => { additions[t.flag] = 'skipped'; });
+    if (emailOk || smsOk || (smsOptout && !payload.email)) additions[touch.flag] = 'yes';
+    if (Object.keys(additions).length) await patchFlag(lead.key, d, additions);
+    if (emailOk || smsOk) cadenceSent++;   // count only real sends against the daily cap
   }
   for (const lead of renewalBatch) {
     const d = lead.data;
