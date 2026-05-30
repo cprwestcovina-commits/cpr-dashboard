@@ -230,6 +230,7 @@ export default async function handler(req, res) {
       last_name: d.last_name || '',
       email: d.email || '',
       last_class_date: lastClassDate,
+      course_type: (d.course_type || 'bls').toLowerCase(),
     };
     if (!payload.email) continue;
     if (await fireWebhook(RENEWAL_HOOK, payload)) {
