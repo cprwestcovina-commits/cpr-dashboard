@@ -1926,7 +1926,7 @@ async function loadAll() {
       all = all.concat(batch);
       if (batch.length < 100) break;        // last page
       offset += 100;
-      if (offset >= 1000) break;            // safety stop at 1000 records
+      if (offset >= 10000) break;           // safety stop at 10k records
     }
     RECORDS = all.filter(r => r.data && r.data.email && r.data.status !== 'anchor');
     render();
