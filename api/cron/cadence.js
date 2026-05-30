@@ -82,8 +82,8 @@ function renewalEmailFields(courseType, days, firstName) {
     book_url: bookUrl,
     cta_label: days === 0 ? 'Renew Today' : 'Pick a Date',
     subject: days === 0 ? `${fn}, your ${courseShort} expires TODAY` : `${fn}, renew your ${courseShort} before it expires`,
-    // Inbox preview text (preheader) — renewal + promo code only, no other copy
-    preheader: `Renew your ${courseShort} — $30 off with code 30BEATS.`,
+    // Inbox preview text (preheader) — promo only; the headline already says renewal
+    preheader: `$30 off with code "30BEATS"`,
   };
 }
 
