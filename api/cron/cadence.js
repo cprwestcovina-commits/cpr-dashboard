@@ -161,19 +161,15 @@ async function patchFlag(key, fullData, additions) {
   return resp.ok;
 }
 
-// Upsert a record by key: PATCH if it exists, else POST to create.
+// Upsert a record by key via delete-then-create. The datastore enforces a STRICT schema that
+// rejects PATCH with non-schema fields ("Unexpected parameter"), but POST (add) tolerates extra
+// fields. So we delete any existing record and re-add it fresh.
 async function upsertRecord(key, data) {
-  let resp = await fetch(`${DS_URL}/${encodeURIComponent(key)}?teamId=${TEAM_ID}`, {
-    method: 'PATCH',
-    headers: { 'Authorization': `Token ${MAKE_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  if (resp.ok) return true;
-  resp = await fetch(`${DS_URL}?teamId=${TEAM_ID}`, {
-    method: 'POST',
-    headers: { 'Authorization': `Token ${MAKE_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key, data }),
-  });
+  const h = { 'Authorization': `Token ${MAKE_TOKEN}`, 'Content-Type': 'application/json' };
+  try {
+    await fetch(`${DS_URL}?teamId=${TEAM_ID}`, { method: 'DELETE', headers: h, body: JSON.stringify({ keys: [key] }) });
+  } catch (e) { /* fine if it didn't exist */ }
+  const resp = await fetch(`${DS_URL}?teamId=${TEAM_ID}`, { method: 'POST', headers: h, body: JSON.stringify({ key, data }) });
   return resp.ok;
 }
 
