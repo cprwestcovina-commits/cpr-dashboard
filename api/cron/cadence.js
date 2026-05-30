@@ -21,7 +21,17 @@ const TEAM_ID = '2313459';
 const T2HR_HOOK = 'https://hook.us2.make.com/qnq2sx9vj7t6csh97lsdovav9j98jz7a';
 const D5_EMAIL_HOOK = 'https://hook.us2.make.com/oxlc4vhndmrcj8x95cdoxje83akkhoih';
 const RENEWAL_HOOK = 'https://hook.us2.make.com/zshj7d7mbz2y5glqxo3mka3w2q9irlms';
-const RENEWAL_DAILY_CAP = 0;    // PAUSED — set to 100 once email is approved
+const RENEWAL_CADENCE_HOOK = 'https://hook.us2.make.com/lpatwdhpp1aprx4h5gqi4hv1xdjiy5mc';
+const RENEWAL_DAILY_CAP = 0;    // PAUSED past-due outreach until approved
+// Upcoming-renewal touch days (before expiration). Tolerance: each lead matches if days_until ∈ [target-1, target+1].
+const RENEWAL_TOUCHES = [
+  { days: 90, flag: 'renewal_t90_sent' },
+  { days: 60, flag: 'renewal_t60_sent' },
+  { days: 30, flag: 'renewal_t30_sent' },
+  { days: 15, flag: 'renewal_t15_sent' },
+  { days: 7,  flag: 'renewal_t7_sent'  },
+  { days: 0,  flag: 'renewal_t0_sent'  },
+];
 
 function ageHours(submittedAt) {
   if (!submittedAt) return -1;
@@ -222,6 +232,63 @@ export default async function handler(req, res) {
     .sort((a, b) => (a.data.date || '').localeCompare(b.data.date || ''));
 
   const renewalBatch = doRenewalToday ? renewalEligible.slice(0, RENEWAL_DAILY_CAP) : [];
+
+  // === Upcoming-renewal cadence: 6 touches at 90/60/30/15/7/0 days before expiration ===
+  // Runs every cron tick (every 2hr) but each lead only gets fired once per touch (flag check).
+  // Both email + SMS per touch.
+  summary.renewalCadenceEmail = 0;
+  summary.renewalCadenceSMS = 0;
+  const confirmedAll = all.filter(r => r.data?.status === 'confirmed' && r.data?.date);
+  for (const lead of confirmedAll) {
+    const d = lead.data;
+    const classDate = new Date(d.date + 'T00:00:00').getTime();
+    const expiresMs = classDate + (2 * 365.25 * 86400000);  // 2 years after class
+    const daysUntilExpiry = Math.round((expiresMs - Date.now()) / 86400000);
+    // Match each touch window (target±1 day tolerance)
+    for (const touch of RENEWAL_TOUCHES) {
+      if (Math.abs(daysUntilExpiry - touch.days) > 1) continue;
+      if (d[touch.flag] === 'yes') continue;
+      const expiresDate = new Date(expiresMs);
+      const expiresLabel = expiresDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      const payload = {
+        first_name: d.first_name || 'there',
+        last_name: d.last_name || '',
+        email: d.email || '',
+        phone: d.phone || '',
+        course_type: (d.course_type || 'bls').toLowerCase(),
+        last_class_date: d.date_formatted || d.date,
+        expires_label: expiresLabel,
+        days_until: String(touch.days),
+      };
+      // Email via renewal cadence webhook
+      let emailOk = false;
+      if (payload.email) {
+        emailOk = await fireWebhook(RENEWAL_CADENCE_HOOK, payload);
+        if (emailOk) summary.renewalCadenceEmail++;
+      }
+      // SMS via GHL direct
+      let smsOk = false;
+      if (payload.phone) {
+        const contactId = await ghlUpsertContact(payload);
+        if (contactId) {
+          const courseShort = courseLabel(payload.course_type);
+          const msg = touch.days === 0
+            ? `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires today — renew now to stay current: https://cprwestcovina.com  Use code 30BEATS for $30 off. STOP to opt out.`
+            : `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires in ${touch.days} days. Want to lock in a renewal slot? Use code 30BEATS for $30 off. Call (626) 605-2067 or reply YES. STOP to opt out.`;
+          const r = await ghlSendSMS(contactId, msg);
+          if (r.ok) {
+            smsOk = true;
+            summary.renewalCadenceSMS++;
+          }
+        }
+      }
+      // Set flag only if at least one channel succeeded
+      if (emailOk || smsOk) {
+        await patchFlag(lead.key, d, { [touch.flag]: 'yes' });
+      }
+      break;  // only process one touch per lead per cron tick
+    }
+  }
   for (const lead of renewalBatch) {
     const d = lead.data;
     const lastClassDate = d.date_formatted || d.date || 'a few years ago';
@@ -246,6 +313,7 @@ export default async function handler(req, res) {
     ts: new Date().toISOString(),
     totalRecords: all.length,
     totalPending: leads.length,
+    confirmedTotal: confirmedAll.length,
     renewalEligible: renewalEligible.length,
     touched: summary,
   });

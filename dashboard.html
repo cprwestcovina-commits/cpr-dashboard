@@ -1611,6 +1611,11 @@
 
     <!-- RENEWALS TAB -->
     <div class="page" id="page-renewals">
+      <!-- Bulletproof renewal cadence status banner -->
+      <div id="renewalCronBanner" style="display:none;background:#F0FDF4;border:1px solid #16A34A;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#15803D;">
+        <strong>🛡 Bulletproof renewal cadence:</strong> <span id="renewalCronText">checking…</span>
+      </div>
+
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
           <h2 style="margin:0;">Renewal Pipeline <span class="count" id="renewalsTabCount">0</span></h2>
@@ -3173,9 +3178,8 @@ function renderWebhooks(hooks) {
 // === RENEWAL PIPELINE KANBAN ===
 const RENEWAL_STAGES = [
   { key: 'new',     label: '🆕 New',        hint: 'Imported, never contacted' },
-  { key: 'emailed', label: '📧 Emailed',    hint: 'Got past-due renewal email' },
-  { key: 'texted',  label: '💬 Texted',     hint: 'SMS follow-up sent' },
-  { key: 'called',  label: '📞 Called',     hint: 'Owner phoned them' },
+  { key: 'emailed', label: '📧 Emailed',    hint: 'Got renewal email(s)' },
+  { key: 'texted',  label: '💬 Texted',     hint: 'SMS sent' },
   { key: 'booked',  label: '🏆 Renewed',    hint: 'They came back and booked' },
   { key: 'lost',    label: '❌ Lost',       hint: 'No response after follow-ups' },
 ];
@@ -3196,8 +3200,12 @@ function setRenewalsView(v) {
 function renewalStageOf(r) {
   const explicit = (r.data.renewal_stage || '').toLowerCase();
   if (explicit && RENEWAL_STAGES.find(s => s.key === explicit)) return explicit;
-  // Auto-derive from flags
-  if (r.data.past_due_email_sent === 'yes') return 'emailed';
+  // Auto-derive from flags (most recent action wins)
+  const d = r.data;
+  const anyRenewalSMS = d.renewal_t90_sent === 'yes' || d.renewal_t60_sent === 'yes' || d.renewal_t30_sent === 'yes' ||
+                       d.renewal_t15_sent === 'yes' || d.renewal_t7_sent === 'yes' || d.renewal_t0_sent === 'yes';
+  // Any past-due email or any cadence touch = emailed at minimum
+  if (d.past_due_email_sent === 'yes' || anyRenewalSMS) return 'emailed';
   return 'new';
 }
 
@@ -3282,7 +3290,34 @@ function renderRenewalsKanban(rows) {
   </div>`;
 }
 
+async function updateRenewalCronBanner() {
+  // Pull the most recent run of any renewal cadence scenario as a freshness signal
+  const banner = document.getElementById('renewalCronBanner');
+  const text = document.getElementById('renewalCronText');
+  if (!banner || !text) return;
+  try {
+    const r = await apiGet(`/scenarios/5237696/logs?teamId=${CONFIG.teamId}&pg[limit]=1`);
+    const logs = r.scenarioLogs || [];
+    const lastTs = logs.length ? new Date(logs[0].timestamp).getTime() : 0;
+    const ageMin = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
+    const ageTxt = ageMin == null ? 'never' : ageMin < 60 ? `${ageMin} min ago` : `${(ageMin/60).toFixed(1)} hr ago`;
+    banner.style.display = 'block';
+    if (ageMin == null || ageMin > 180) {
+      banner.style.background = '#FEF3C7'; banner.style.borderColor = '#F59E0B'; banner.style.color = '#92400E';
+      text.innerHTML = `Vercel Cron pings every 2 hr · 6-touch cadence at T-90/60/30/15/7/0 days · ⚠ Last fire <strong>${ageTxt}</strong>`;
+    } else {
+      banner.style.background = '#F0FDF4'; banner.style.borderColor = '#16A34A'; banner.style.color = '#15803D';
+      text.innerHTML = `Vercel Cron pings every 2 hr · 6-touch cadence at T-90/60/30/15/7/0 days · Last fire <strong>${ageTxt}</strong> · ✓ healthy`;
+    }
+  } catch (e) {
+    banner.style.display = 'block';
+    banner.style.background = '#FEE2E2'; banner.style.borderColor = '#DC2626'; banner.style.color = '#991B1B';
+    text.innerHTML = '⚠ Could not fetch renewal cron status: ' + e.message;
+  }
+}
+
 function renderRenewalsPage() {
+  updateRenewalCronBanner();
   // Dedupe by email — keep each student's most recent confirmed class as their "renewal anchor"
   const latestByEmail = new Map();
   RECORDS.forEach(r => {
@@ -5118,6 +5153,8 @@ async function triggerVercelCronNow() {
       `💬 Day 5 SMS:        ${t.d5sms || 0} sent`,
       `💬 Day 7 ACLS/PALS:  ${t.d7sms || 0} sent`,
       `🔁 Renewal outreach: ${t.renewal || 0} sent (daily cap 100, only fires once/day)`,
+      `📅 Renewal cadence email: ${t.renewalCadenceEmail || 0} sent (T-90/60/30/15/7/0)`,
+      `📅 Renewal cadence SMS:   ${t.renewalCadenceSMS || 0} sent`,
       ``,
       errCount ? `⚠ ${errCount} errors: ${(t.errors || []).slice(0,3).join(', ')}` : `✓ No errors`,
     ];
