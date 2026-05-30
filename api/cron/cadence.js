@@ -80,7 +80,7 @@ function renewalEmailFields(courseType, days, firstName) {
     headline: headlineByDay[days] || `Hey ${fn}, time to renew`,
     subhead: subheadByDay[days] || `Time to renew your ${courseShort}.`,
     book_url: bookUrl,
-    cta_label: days === 0 ? `Renew Today — ${price}` : `Pick a Date — ${price}`,
+    cta_label: days === 0 ? 'Renew Today' : 'Pick a Date',
     subject: days === 0 ? `${fn}, your ${courseShort} expires TODAY` : `${fn}, renew your ${courseShort} before it expires`,
     // Inbox preview text (preheader) — renewal + promo code only, no other copy
     preheader: `Renew your ${courseShort} — $30 off with code 30BEATS.`,
