@@ -3,7 +3,7 @@
   "rewrites": [{ "source": "/api/make/:path*", "destination": "/api/make/[...path]" }],
   "crons": [
     {
-      "path": "/api/cron/t2hr-bulk",
+      "path": "/api/cron/cadence",
       "schedule": "0 */2 * * *"
     }
   ]
