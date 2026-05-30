@@ -3409,7 +3409,7 @@ async function updateRenewalWatchdog(rows) {
   // 4. Send failures from last run
   const fails = wd ? ((wd.fails?.renewalEmail||0) + (wd.fails?.renewalSms||0)) : 0;
   if (!wd) checks.push({ lvl:'warn', label:'Last-run sends', val:'Unknown', note:'No run recorded yet' });
-  else if (fails === 0) checks.push({ lvl:'ok', label:'Last-run sends', val:'No failures', note:`${(wd.sent?.renewalEmail||0)} emails · ${(wd.sent?.renewalSms||0)} texts` });
+  else if (fails === 0) checks.push({ lvl:'ok', label:'Last-run sends', val:'No failures', note:`${(wd.sent?.renewalEmail||0)} emails · ${(wd.sent?.renewalSms||0)} texts${wd.optouts?.renewalSms ? ` · ${wd.optouts.renewalSms} opt-outs skipped` : ''}` });
   else checks.push({ lvl:'err', label:'Last-run sends', val:`${fails} failed`, note:'See errors below' });
   // 5. Missed touches (slipped past without earlier touches)
   if (missed === 0) checks.push({ lvl:'ok', label:'Missed touches', val:'None', note:'No one slipped through' });

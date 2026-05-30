@@ -75,7 +75,22 @@ async function ghlUpsertContact(lead) {
   });
   if (!resp.ok) return null;
   const data = await resp.json();
-  return data.contact?.id || data.id || null;
+  const c = data.contact || data;
+  const id = c?.id || null;
+  if (!id) return null;
+  // dnd:true blocks all channels; dndSettings.SMS.status==='active' blocks SMS specifically
+  const smsBlocked = c.dnd === true || c?.dndSettings?.SMS?.status === 'active';
+  return { id, dnd: !!smsBlocked };
+}
+
+// Upsert + send SMS, but skip gracefully if the contact opted out (STOP / DND).
+// Returns: 'sent' | 'optout' | 'fail'
+async function sendSmsIfAllowed(payload, message) {
+  const c = await ghlUpsertContact(payload);
+  if (!c || !c.id) return 'fail';
+  if (c.dnd) return 'optout';
+  const r = await ghlSendSMS(c.id, message);
+  return r.ok ? 'sent' : 'fail';
 }
 
 async function ghlSendSMS(contactId, message) {
@@ -184,16 +199,15 @@ export default async function handler(req, res) {
 
     // T+24hr SMS — direct GHL
     if (age >= 24 && age <= 168 && d.nudge_t24hr_sent !== 'yes') {
-      const contactId = await ghlUpsertContact(payload);
-      if (contactId) {
-        const msg = `Hi ${payload.first_name}, Caroline from CPR West Covina. Your spot for ${courseLabel(payload.course_type)} on ${payload.date_formatted} is still open. Want me to lock it in? Reply YES or call (626) 605-2067. STOP to opt out.`;
-        const r = await ghlSendSMS(contactId, msg);
-        if (r.ok) {
-          await patchFlag(lead.key, d, { nudge_t24hr_sent: 'yes', lead_stage: 'text2' });
-          summary.t24hr++;
-        } else {
-          summary.errors.push(`t24hr: ${payload.first_name} (${r.status})`);
-        }
+      const msg = `Hi ${payload.first_name}, Caroline from CPR West Covina. Your spot for ${courseLabel(payload.course_type)} on ${payload.date_formatted} is still open. Want me to lock it in? Reply YES or call (626) 605-2067. STOP to opt out.`;
+      const r = await sendSmsIfAllowed(payload, msg);
+      if (r === 'sent') {
+        await patchFlag(lead.key, d, { nudge_t24hr_sent: 'yes', lead_stage: 'text2' });
+        summary.t24hr++;
+      } else if (r === 'optout') {
+        await patchFlag(lead.key, d, { nudge_t24hr_sent: 'yes' });
+      } else {
+        summary.errors.push(`t24hr: ${payload.first_name} (send failed)`);
       }
     }
 
@@ -207,28 +221,26 @@ export default async function handler(req, res) {
 
     // Day 5 SMS
     if (age >= 120 && age <= 720 && d.nudge_d5sms_sent !== 'yes') {
-      const contactId = await ghlUpsertContact(payload);
-      if (contactId) {
-        const msg = `Hey ${payload.first_name}, Caroline. I held a seat for ${courseLabel(payload.course_type)} on ${payload.date_formatted}. Use code COMEBACK30 at checkout for $30 off — expires soon. Reply STOP to opt out.`;
-        const r = await ghlSendSMS(contactId, msg);
-        if (r.ok) {
-          await patchFlag(lead.key, d, { nudge_d5sms_sent: 'yes' });
-          summary.d5sms++;
-        }
+      const msg = `Hey ${payload.first_name}, Caroline. I held a seat for ${courseLabel(payload.course_type)} on ${payload.date_formatted}. Use code COMEBACK30 at checkout for $30 off — expires soon. Reply STOP to opt out.`;
+      const r = await sendSmsIfAllowed(payload, msg);
+      if (r === 'sent') {
+        await patchFlag(lead.key, d, { nudge_d5sms_sent: 'yes' });
+        summary.d5sms++;
+      } else if (r === 'optout') {
+        await patchFlag(lead.key, d, { nudge_d5sms_sent: 'yes' });
       }
     }
 
     // Day 7 ACLS/PALS SMS
     if (isAclsPals && age >= 156 && age <= 180 && d.nudge_d7sms_sent !== 'yes') {
-      const contactId = await ghlUpsertContact(payload);
-      if (contactId) {
-        const code = /pals/i.test(d.course_type) ? 'PALS25' : 'ACLS25';
-        const msg = `Hi ${payload.first_name}, Caroline. Final reminder for ${courseLabel(payload.course_type)} on ${payload.date_formatted}. Use code ${code} for $25 off. Call (626) 605-2067 to confirm. STOP to opt out.`;
-        const r = await ghlSendSMS(contactId, msg);
-        if (r.ok) {
-          await patchFlag(lead.key, d, { nudge_d7sms_sent: 'yes' });
-          summary.d7sms++;
-        }
+      const code = /pals/i.test(d.course_type) ? 'PALS25' : 'ACLS25';
+      const msg = `Hi ${payload.first_name}, Caroline. Final reminder for ${courseLabel(payload.course_type)} on ${payload.date_formatted}. Use code ${code} for $25 off. Call (626) 605-2067 to confirm. STOP to opt out.`;
+      const r = await sendSmsIfAllowed(payload, msg);
+      if (r === 'sent') {
+        await patchFlag(lead.key, d, { nudge_d7sms_sent: 'yes' });
+        summary.d7sms++;
+      } else if (r === 'optout') {
+        await patchFlag(lead.key, d, { nudge_d7sms_sent: 'yes' });
       }
     }
   }
@@ -296,24 +308,21 @@ export default async function handler(req, res) {
         if (emailOk) summary.renewalCadenceEmail++;
         else { summary.renewalEmailFail++; summary.errors.push(`renewal-email T-${touch.days} ${payload.email}`); }
       }
-      // SMS via GHL direct
-      let smsOk = false;
+      // SMS via GHL direct — skips gracefully if the contact opted out (STOP/DND)
+      let smsOk = false, smsOptout = false;
       if (payload.phone) {
-        const contactId = await ghlUpsertContact(payload);
-        if (contactId) {
-          const courseShort = courseLabel(payload.course_type);
-          const msg = touch.days === 0
-            ? `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires today — renew now to stay current: https://cprwestcovina.com  Use code 30BEATS for $30 off. STOP to opt out.`
-            : `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires in ${touch.days} days. Want to lock in a renewal slot? Use code 30BEATS for $30 off. Call (626) 605-2067 or reply YES. STOP to opt out.`;
-          const r = await ghlSendSMS(contactId, msg);
-          if (r.ok) {
-            smsOk = true;
-            summary.renewalCadenceSMS++;
-          } else { summary.renewalSmsFail++; summary.errors.push(`renewal-sms T-${touch.days} ${payload.phone} (${r.status})`); }
-        } else { summary.renewalSmsFail++; summary.errors.push(`renewal-sms T-${touch.days} ${payload.phone} (GHL contact upsert failed)`); }
+        const courseShort = courseLabel(payload.course_type);
+        const msg = touch.days === 0
+          ? `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires today — renew now to stay current: https://cprwestcovina.com  Use code 30BEATS for $30 off. STOP to opt out.`
+          : `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires in ${touch.days} days. Want to lock in a renewal slot? Use code 30BEATS for $30 off. Call (626) 605-2067 or reply YES. STOP to opt out.`;
+        const r = await sendSmsIfAllowed(payload, msg);
+        if (r === 'sent') { smsOk = true; summary.renewalCadenceSMS++; }
+        else if (r === 'optout') { smsOptout = true; summary.renewalSmsOptout = (summary.renewalSmsOptout||0) + 1; }
+        else { summary.renewalSmsFail++; summary.errors.push(`renewal-sms T-${touch.days} ${payload.phone} (send failed)`); }
       }
-      // Set flag only if at least one channel succeeded
-      if (emailOk || smsOk) {
+      // Mark the touch done if a channel succeeded. If the only channel was SMS and they opted out
+      // (no email to fall back on), mark done anyway so we don't retry a blocked number forever.
+      if (emailOk || smsOk || (smsOptout && !payload.email)) {
         await patchFlag(lead.key, d, { [touch.flag]: 'yes' });
       }
       break;  // only process one touch per lead per cron tick
@@ -374,6 +383,7 @@ export default async function handler(req, res) {
       renewalEmail: summary.renewalCadenceEmail, renewalSms: summary.renewalCadenceSMS,
     },
     fails: { renewalEmail: summary.renewalEmailFail, renewalSms: summary.renewalSmsFail },
+    optouts: { renewalSms: summary.renewalSmsOptout || 0 },
     errors: summary.errors.slice(0, 25),
   };
   let watchdogWritten = false;
