@@ -24,8 +24,8 @@ const ANGLES = [
 
 async function genOne(angle, dateLabel, appWeek) {
   const connectLine = appWeek
-    ? "Stay Connected section: ONE short, brief sentence — mention following our socials AND downloading our free study-guide app."
-    : "Stay Connected section: ONE short, brief sentence — invite them to follow our socials (Instagram, Facebook, YouTube). Keep it light.";
+    ? "Stay Connected section: 1-2 short, brief sentences — invite them to follow our socials AND download our free study-guide app, AND warmly encourage them to tell a friend, family member, or coworker who should get CPR-certified."
+    : "Stay Connected section: 1-2 short, brief sentences — invite them to follow our socials (Instagram, Facebook, YouTube), AND warmly encourage them to share with a friend, family member, or coworker who should get CPR-certified. Keep it light and community-minded.";
   const prompt = `${BRAND}\n\nToday is ${dateLabel}.\nWrite ONE short, skimmable newsletter email with EXACTLY these three sections, in order, using these exact header lines (with the emoji), each on its own line followed by 1-2 sentences:\n\n💡 Fun Fact\n(a genuinely interesting CPR/first-aid/AED fun fact)\n\n📅 What's Happening\n(${angle.brief})\n\n📲 Stay Connected\n(${connectLine})\n\nDo NOT add other sections, links, or an unsubscribe line.\n\nReturn your answer in EXACTLY this plain-text format (no markdown, no JSON):\nSUBJECT: <one catchy line>\nHEADLINE: <one line>\nBODY:\n💡 Fun Fact\n<text>\n\n📅 What's Happening\n<text>\n\n📲 Stay Connected\n<text>`;
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
