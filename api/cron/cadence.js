@@ -188,10 +188,30 @@ async function fireWebhook(url, payload) {
   }
 }
 
+// Self-heal: make sure a Make scenario is active; restart it if it has stopped/errored.
+// Returns one of: 'ok' (already running) | 'healed' (was down, restarted) | 'failed:<msg>'
+async function ensureScenarioActive(scenarioId) {
+  const h = { 'Authorization': `Token ${MAKE_TOKEN}`, 'Content-Type': 'application/json' };
+  try {
+    const resp = await fetch(`https://us2.make.com/api/v2/scenarios/${scenarioId}?teamId=${TEAM_ID}`, { headers: h });
+    if (!resp.ok) return `failed:status ${resp.status}`;
+    const s = (await resp.json()).scenario || {};
+    if (s.isActive) return 'ok';
+    const start = await fetch(`https://us2.make.com/api/v2/scenarios/${scenarioId}/start?teamId=${TEAM_ID}`, { method: 'POST', headers: h });
+    return start.ok ? 'healed' : `failed:start ${start.status}`;
+  } catch (e) {
+    return 'failed:' + e.message;
+  }
+}
+
 export default async function handler(req, res) {
   if (process.env.CRON_SECRET && req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
+
+  // === Self-heal: ensure the renewal email scenario is running (restart it if it stopped/errored).
+  // Always-on, free, every 2hr — covers the exact failure mode where a Make scenario crashes off. ===
+  const selfHeal = { renewalEmailScenario: await ensureScenarioActive(5237696) };
 
   // Fetch ALL records (pending + confirmed) — pagination via offset
   let all = [];
@@ -438,8 +458,12 @@ export default async function handler(req, res) {
     },
     fails: { renewalEmail: summary.renewalEmailFail, renewalSms: summary.renewalSmsFail },
     optouts: { renewalSms: summary.renewalSmsOptout || 0 },
+    selfHeal,                 // {renewalEmailScenario: 'ok'|'healed'|'failed:...'}
     errors: summary.errors.slice(0, 25),
   };
+  // Surface an auto-heal as a visible note so the dashboard/agent knows it happened
+  if (selfHeal.renewalEmailScenario === 'healed') health.errors.unshift('AUTO-HEALED: renewal email scenario was stopped — restarted it');
+  else if ((selfHeal.renewalEmailScenario || '').startsWith('failed')) health.errors.unshift(`SELF-HEAL FAILED: renewal email scenario (${selfHeal.renewalEmailScenario})`);
   let watchdogWritten = false;
   try { watchdogWritten = await upsertRecord('__watchdog__', health); } catch (e) {}
 

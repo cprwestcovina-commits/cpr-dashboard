@@ -3402,9 +3402,12 @@ async function updateRenewalWatchdog(rows) {
   // --- Decide each check's level ---
   const checks = [];
   // 1. Cron alive (Vercel fires every 2hr → stale if >3hr)
+  const heal = wd && wd.selfHeal ? wd.selfHeal.renewalEmailScenario : null;
   if (ageMin == null) checks.push({ lvl:'warn', label:'Automation', val:'Awaiting first run', note:'Cron writes status here every 2 hr' });
   else if (ageMin > 180) checks.push({ lvl:'err', label:'Automation', val:'STALLED', note:`No cron run in ${ageTxt}` });
-  else checks.push({ lvl:'ok', label:'Automation', val:'Running', note:'Vercel cron every 2 hr' });
+  else if (heal === 'healed') checks.push({ lvl:'warn', label:'Automation', val:'Auto-healed', note:'Email scenario had stopped — cron restarted it' });
+  else if (heal && heal.startsWith('failed')) checks.push({ lvl:'err', label:'Automation', val:'Heal failed', note:'Email scenario down, restart failed' });
+  else checks.push({ lvl:'ok', label:'Automation', val:'Running', note:'Vercel cron every 2 hr · self-healing on' });
   // 2. Backlog — students due a touch right now
   if (dueBacklog === 0) checks.push({ lvl:'ok', label:'Cadence backlog', val:'Clear', note:'Everyone in-window is up to date' });
   else if (ageMin != null && ageMin <= 180) checks.push({ lvl:'warn', label:'Cadence backlog', val:`${dueBacklog} due`, note:'Will send on next tick' });
