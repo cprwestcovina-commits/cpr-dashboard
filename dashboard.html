@@ -1449,10 +1449,6 @@
         </div>
         <div>
           <div class="card">
-            <h2>Recent Activity</h2>
-            <div id="recentList"></div>
-          </div>
-          <div class="card">
             <h2>Capacity Watch (next 14 days)</h2>
             <div id="capacityList"></div>
           </div>
@@ -1530,7 +1526,11 @@
     <div class="page" id="page-revenue">
       <div class="stats" id="revenueStats"></div>
       <div class="card">
-        <h2>This Year — Monthly Revenue</h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0;">Monthly Revenue by Course</h2>
+          <div id="revenueYearTabs" style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:8px;"></div>
+        </div>
+        <div id="revenueLegend" style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--gray-700);margin:10px 0 4px;"></div>
         <div id="monthlyChart"></div>
       </div>
       <div class="grid-2">
@@ -1997,6 +1997,11 @@ const COURSE_KEYS = [
   { key: 'pals', label: 'PALS' },
   { key: 'renewal', label: 'Renewal' },
 ];
+// Colors match the calendar legend / course pills
+const COURSE_COLORS = { bls:'#C0392B', renewal:'#2874A6', heartsaver:'#16a085', acls:'#8e44ad', pals:'#d35400' };
+const COURSE_ORDER = [['bls','BLS'],['renewal','Renewal'],['heartsaver','Heartsaver'],['acls','ACLS'],['pals','PALS']];
+var revenueYear = null;  // selected year for the monthly revenue chart
+function setRevenueYear(y) { revenueYear = y; renderRevenue(); }
 function courseLabel(t) {
   const ct = (t || '').replace(/^aha_/, '').toLowerCase();
   if (ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') return '<span class="pill renewal">RENEWAL</span>';
@@ -2093,19 +2098,6 @@ function renderDashboard() {
         <td>${courseLabel(r.data.course_type)}</td>
       </tr>`).join('') + `</tbody></table>`
     : '<div class="empty">No bookings this week.</div>';
-
-  // Recent activity
-  const recent = [...RECORDS]
-    .sort((a,b) => (b.data.submitted_at || '').localeCompare(a.data.submitted_at || ''))
-    .slice(0, 8);
-  document.getElementById('recentList').innerHTML = recent.length
-    ? `<table><thead><tr><th>Student</th><th>Class Date</th><th>Status</th></tr></thead><tbody>` +
-      recent.map(r => `<tr>
-        <td><strong>${escapeHtml(r.data.first_name)} ${escapeHtml(r.data.last_name)}</strong><br><span class="small">${escapeHtml(r.data.email)}</span></td>
-        <td>${escapeHtml(fmtDate(r.data.date))}<br><span class="small">${escapeHtml(r.data.time_label || '')}</span></td>
-        <td>${statusPill(r.data.status)} ${courseLabel(r.data.course_type)}</td>
-      </tr>`).join('') + `</tbody></table>`
-    : '<div class="empty">No activity yet.</div>';
 
   // Capacity
   const t2 = today();
@@ -2495,21 +2487,38 @@ function renderRevenue() {
       <div class="sub">${s.sub}</div>
     </div>`).join('');
 
-  // Monthly chart for current year
-  const year = t.slice(0,4);
+  // === Monthly revenue, stacked by course, with year tabs ===
+  // Year tabs: every year present in confirmed data, plus the current year.
+  const yearsSet = new Set([t.slice(0,4)]);
+  REC.forEach(r => { if (r.data.status === 'confirmed' && r.data.date) yearsSet.add(r.data.date.slice(0,4)); });
+  const years = [...yearsSet].filter(y => /^\d{4}$/.test(y)).sort();
+  if (!revenueYear || !years.includes(revenueYear)) revenueYear = t.slice(0,4);
+  document.getElementById('revenueYearTabs').innerHTML = years.map(y => `
+    <button onclick="setRevenueYear('${y}')" style="border:none;background:${y===revenueYear?'#fff':'transparent'};padding:6px 14px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:700;box-shadow:${y===revenueYear?'0 1px 2px rgba(0,0,0,0.08)':'none'};">${y}</button>`).join('');
+  // Legend
+  document.getElementById('revenueLegend').innerHTML = COURSE_ORDER.map(([k,lbl]) =>
+    `<span><span style="display:inline-block;width:10px;height:10px;background:${COURSE_COLORS[k]};border-radius:2px;vertical-align:middle;margin-right:4px;"></span>${lbl}</span>`).join('');
+
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthCounts = months.map((_, i) => {
+  const monthData = months.map((_, i) => {
     const mm = String(i+1).padStart(2,'0');
-    return REC.filter(r => r.data.status === 'confirmed' && (r.data.date || '').startsWith(`${year}-${mm}`)).length;
+    const recsM = REC.filter(r => r.data.status === 'confirmed' && (r.data.date || '').startsWith(`${revenueYear}-${mm}`));
+    const byC = {}; COURSE_ORDER.forEach(([k]) => byC[k] = 0);
+    recsM.forEach(r => { const k = courseKey(r.data.course_type); if (k in byC) byC[k] += amountFor(r); });
+    return { byC, total: Object.values(byC).reduce((a,b)=>a+b,0) };
   });
-  const maxCount = Math.max(...monthCounts, 1);
+  const maxTotal = Math.max(...monthData.map(d => d.total), 1);
   document.getElementById('monthlyChart').innerHTML = months.map((m, i) => {
-    const c = monthCounts[i];
-    const pct = (c / maxCount) * 100;
+    const { byC, total } = monthData[i];
+    const barW = (total / maxTotal) * 100;  // month length vs biggest month
+    const segs = COURSE_ORDER.filter(([k]) => byC[k] > 0).map(([k,lbl]) => {
+      const segW = total ? (byC[k] / total) * 100 : 0;  // course share within the month
+      return `<div title="${lbl}: $${Math.round(byC[k]).toLocaleString()} (${Math.round(segW)}%)" style="width:${segW}%;background:${COURSE_COLORS[k]};height:100%;"></div>`;
+    }).join('');
     return `<div class="bar-row">
       <div class="bar-label">${m}</div>
-      <div class="bar"><div class="bar-fill" style="width:${pct}%;"></div></div>
-      <div class="bar-val">$${(c * CONFIG.pricePerBooking).toLocaleString()}</div>
+      <div class="bar"><div style="display:flex;width:${barW}%;height:100%;">${segs}</div></div>
+      <div class="bar-val">$${Math.round(total).toLocaleString()}</div>
     </div>`;
   }).join('');
 
