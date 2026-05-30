@@ -1,0 +1,226 @@
+import React, { useEffect, useState } from "react";
+
+const BOOKING_IFRAME_SRC =
+  "https://cprwestcovina-commits.github.io/bls-booking/bls-booking.html";
+
+function BookingIframe({ minHeight = 480 }) {
+  const [height, setHeight] = useState(minHeight);
+
+  useEffect(() => {
+    function onMessage(e) {
+      if (e?.data?.type === "bls-widget-resize" && typeof e.data.height === "number") {
+        setHeight(Math.max(minHeight, e.data.height));
+      }
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [minHeight]);
+
+  return (
+    <iframe
+      src={BOOKING_IFRAME_SRC}
+      title="BLS Class Booking"
+      loading="lazy"
+      style={{
+        width: "100%",
+        maxWidth: "560px",
+        height: `${height}px`,
+        border: "none",
+        display: "block",
+        transition: "height 0.2s ease",
+      }}
+      className="mx-auto"
+    />
+  );
+}
+
+export default function BlsWestCovinaLandingPage() {
+  return (
+    <main className="min-h-screen bg-white text-slate-900">
+      {/* HERO — side-by-side on desktop, stacked on mobile */}
+      <section id="book" className="relative overflow-hidden bg-gradient-to-b from-slate-50 to-white px-5 pt-4 pb-10 md:pt-14">
+        <div className="pointer-events-none absolute inset-0 opacity-40">
+          <div className="absolute left-1/4 top-10 h-72 w-72 rounded-full bg-blue-100 blur-3xl" />
+          <div className="absolute right-0 top-40 h-56 w-56 rounded-full bg-red-100 blur-3xl" />
+        </div>
+
+        <div className="relative mx-auto grid max-w-6xl gap-6 md:gap-10 md:grid-cols-2 md:items-center">
+          {/* LEFT — copy (shown below widget on mobile, beside on desktop) */}
+          <div className="order-2 md:order-1 text-center md:text-left">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-600 shadow-sm">
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+              Official AHA Training Site
+            </div>
+
+            <h1 className="mt-4 text-4xl font-extrabold leading-[1.05] tracking-tight text-slate-900 md:text-5xl lg:text-6xl">
+              AHA BLS Certification in West Covina
+            </h1>
+
+            <ul className="mt-6 space-y-2 text-left text-base text-slate-700 md:text-lg">
+              <li className="flex items-start gap-3">
+                <span className="mt-1 text-red-500">✓</span>
+                <span>Finish in 2 hours</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="mt-1 text-red-500">✓</span>
+                <span>Official AHA BLS for healthcare providers</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="mt-1 text-red-500">✓</span>
+                <span>Hands-on CPR &amp; AED practice in person</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="mt-1 text-red-500">✓</span>
+                <span>Same-day eCard — no waiting</span>
+              </li>
+            </ul>
+
+            <div className="mt-6 flex items-center justify-center gap-2 text-base text-slate-600 md:justify-start">
+              <span className="text-yellow-400">★★★★★</span>
+              <span className="font-bold text-slate-800">4.9</span>
+              <span className="text-slate-500">• 260+ Google Reviews</span>
+            </div>
+          </div>
+
+          {/* RIGHT — booking widget (shown first on mobile) */}
+          <div className="order-1 md:order-2">
+            <BookingIframe />
+          </div>
+        </div>
+      </section>
+
+      {/* CLASSROOM COLLAGE */}
+      <section className="bg-white px-5 py-10">
+        <div className="mx-auto max-w-5xl">
+          <img
+            src="https://horizons-cdn.hostinger.com/9122397b-da52-4cad-8927-55b80d26b65c/b2a1a96e4a3dff0f310d43ccf1d53c83.png"
+            alt="AHA BLS certification classroom in West Covina — AHA authorized training site signage, building exterior, instructor teaching, and hands-on CPR practice on mannequins"
+            className="mx-auto w-full max-w-4xl rounded-3xl shadow-sm"
+            loading="lazy"
+          />
+        </div>
+      </section>
+
+      {/* WHAT TO EXPECT */}
+      <section className="bg-slate-50 px-5 py-16">
+        <div className="mx-auto max-w-5xl text-center">
+          <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl">
+            Fast, simple BLS certification
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-lg text-slate-600">
+            Built for healthcare providers who need certification this week — not next month.
+          </p>
+
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {[
+              { icon: "⏱️", title: "Finish in 2 hours", body: "Most students complete the class in 90–120 minutes." },
+              { icon: "🫀", title: "Hands-on practice", body: "CPR, AED, rescue breathing, and team-based BLS skills." },
+              { icon: "✅", title: "Same-day eCard", body: "Receive your official AHA BLS eCard immediately after passing." },
+            ].map((card) => (
+              <div key={card.title} className="rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm">
+                <div className="text-3xl">{card.icon}</div>
+                <h3 className="mt-3 text-xl font-bold text-slate-900">{card.title}</h3>
+                <p className="mt-2 text-slate-600">{card.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* REVIEWS */}
+      <section id="reviews" className="bg-white px-5 py-16">
+        <div className="mx-auto max-w-5xl text-center">
+          <div className="text-3xl text-yellow-400">★★★★★</div>
+          <h2 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">
+            4.9 stars • 260+ verified Google reviews
+          </h2>
+
+          <div className="mt-10 grid gap-5 md:grid-cols-2">
+            {[
+              {
+                quote: "The BLS renewal class was clear, helpful, and took only 90 minutes. I left feeling confident in my skills again. The instructor was kind and answered questions well.",
+                name: "Rachel Fennell",
+              },
+              {
+                quote: "Best recertification class ever. Great environment, lots of parking, nice venue, great teacher. Precise training. Got my card on the day too.",
+                name: "Catherine Siordia",
+              },
+            ].map((r) => (
+              <div key={r.name} className="rounded-2xl border border-slate-200 bg-white p-7 text-left shadow-sm">
+                <p className="text-lg leading-relaxed text-slate-700">"{r.quote}"</p>
+                <p className="mt-5 font-bold text-slate-900">{r.name}</p>
+                <p className="text-sm text-slate-500">Verified Google Review</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="bg-slate-50 px-5 py-16">
+        <div className="mx-auto max-w-3xl">
+          <h2 className="text-center text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl">
+            BLS certification questions
+          </h2>
+
+          <div className="mt-10 space-y-3">
+            {[
+              {
+                q: "Is this the correct course for healthcare providers?",
+                a: "Yes. This is the American Heart Association BLS Provider course for healthcare professionals and students who need BLS certification.",
+              },
+              {
+                q: "Do I receive my AHA eCard the same day?",
+                a: "Yes. After successful completion, your official AHA BLS eCard is issued the same day.",
+              },
+              {
+                q: "How long is the BLS class?",
+                a: "Most students finish in about 90 minutes to 2 hours, depending on class size and skills practice.",
+              },
+              {
+                q: "What if my BLS certification is already expired?",
+                a: "You can still take the class. This course is appropriate for new certifications and expired BLS renewals.",
+              },
+              {
+                q: "Do I need to bring my old BLS card?",
+                a: "It helps, but is not required. Bring a photo ID and any employer requirements if applicable.",
+              },
+            ].map((item, i) => (
+              <details key={i} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <summary className="flex cursor-pointer list-none items-center justify-between text-left text-lg font-bold text-slate-900">
+                  {item.q}
+                  <span className="ml-4 text-2xl text-slate-400 transition group-open:rotate-45">+</span>
+                </summary>
+                <p className="mt-3 leading-relaxed text-slate-600">{item.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FINAL CTA — second booking widget */}
+      <section id="book-bottom" className="relative overflow-hidden bg-slate-900 px-5 py-16 text-white">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute left-0 top-0 h-72 w-72 rounded-full bg-blue-400 blur-3xl" />
+          <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-red-400 blur-3xl" />
+        </div>
+
+        <div className="relative mx-auto max-w-5xl">
+          <div className="mb-10 text-center">
+            <h2 className="text-3xl font-extrabold tracking-tight md:text-5xl">Ready to get certified?</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-300 md:text-xl">
+              Pick a date below and lock in your seat in under 60 seconds.
+            </p>
+          </div>
+
+          <BookingIframe />
+
+          <p className="mt-8 text-center text-sm text-slate-400">
+            Official AHA Training Site • Same-day eCard • 100 Barranca St, West Covina
+          </p>
+        </div>
+      </section>
+
+    </main>
+  );
+}

@@ -22,6 +22,9 @@ const T2HR_HOOK = 'https://hook.us2.make.com/qnq2sx9vj7t6csh97lsdovav9j98jz7a';
 const D5_EMAIL_HOOK = 'https://hook.us2.make.com/oxlc4vhndmrcj8x95cdoxje83akkhoih';
 const RENEWAL_HOOK = 'https://hook.us2.make.com/zshj7d7mbz2y5glqxo3mka3w2q9irlms';
 const RENEWAL_CADENCE_HOOK = 'https://hook.us2.make.com/lpatwdhpp1aprx4h5gqi4hv1xdjiy5mc';
+const BROADCAST_HOOK = 'https://hook.us2.make.com/hsrr8ei1zmvaphnujn46fwmv9s16hj01';
+const BROADCAST_CAP = 150;  // max broadcast emails per day (Gmail-safe for a personal account)
+const UNSUB_BASE = 'https://cpr-dashboard-cprwc.vercel.app/api/unsubscribe';
 const RENEWAL_DAILY_CAP = 0;    // PAUSED past-due (already-expired) outreach until approved
 const RENEWAL_CADENCE_CAP = 25; // upcoming-renewal cadence: max students contacted per day, closest-to-expiry first
 // Upcoming-renewal touch days (before expiration). Tolerance: each lead matches if days_until ∈ [target-1, target+1].
@@ -422,6 +425,41 @@ export default async function handler(req, res) {
       summary.renewal++;
     } else {
       summary.errors.push(`renewal: ${payload.first_name}`);
+    }
+  }
+
+  // === Broadcast campaign drip (newsletter to all students) — throttled, opt-out aware ===
+  // Reads the active campaign from a __campaign__ record (written by the dashboard). Sends to up to
+  // BROADCAST_CAP unique emails/day that haven't received THIS campaign and haven't opted out.
+  summary.broadcastSent = 0;
+  let campaign = null;
+  try {
+    const crec = all.find(r => r.key === '__campaign__' || r.data?.status === 'campaign');
+    if (crec && crec.data?.landing_url) campaign = JSON.parse(crec.data.landing_url);
+  } catch (e) {}
+  if (campaign && campaign.active && campaign.id && doRenewalToday) {
+    // Emails already sent this campaign (any record carrying this campaign id)
+    const sentEmails = new Set(all.filter(r => r.data?.last_broadcast_id === campaign.id && r.data?.email).map(r => r.data.email.toLowerCase()));
+    const seen = new Set();
+    const recipients = [];
+    for (const r of all) {
+      const e = (r.data?.email || '').toLowerCase();
+      if (!e || seen.has(e)) continue;
+      if (r.data.status === 'campaign' || r.data.status === 'watchdog') continue;
+      seen.add(e);
+      if (sentEmails.has(e) || r.data.email_optout === 'yes') continue;
+      recipients.push(r);
+    }
+    for (const r of recipients.slice(0, BROADCAST_CAP)) {
+      const unsub = `${UNSUB_BASE}?e=${encodeURIComponent(r.data.email)}`;
+      const footer = `<div style="margin-top:28px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center;">CPR West Covina · 100 Barranca St #255-B, West Covina, CA 91791<br><a href="${unsub}" style="color:#999;">Unsubscribe</a></div>`;
+      const html = (campaign.html || '') + footer;
+      if (await fireWebhook(BROADCAST_HOOK, { email: r.data.email, subject: campaign.subject || 'News from CPR West Covina', html })) {
+        await patchFlag(r.key, r.data, { last_broadcast_id: campaign.id });
+        summary.broadcastSent++;
+      } else {
+        summary.errors.push(`broadcast: ${r.data.email}`);
+      }
     }
   }
 

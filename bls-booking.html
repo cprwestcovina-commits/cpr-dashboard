@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLS Certification Booking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-CZ4Y22LGMY"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-CZ4Y22LGMY');
+  gtag('config', 'AW-17617840605');
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --red: #C0392B;
+    --red-dark: #96281B;
+    --red-light: #F9EBEA;
+    --red-mid: #E74C3C;
+    --gray-900: #1a1a1a;
+    --gray-700: #3d3d3d;
+    --gray-500: #757575;
+    --gray-300: #d0d0d0;
+    --gray-100: #f5f5f5;
+    --white: #ffffff;
+    --success: #1e8449;
+    --success-light: #eafaf1;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  html, body {
+    font-family: 'DM Sans', sans-serif;
+    background: transparent;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .widget {
+    background: var(--white);
+    border-radius: 20px;
+    max-width: 520px;
+    width: 100%;
+    overflow: hidden;
+    box-shadow: 0 4px 40px rgba(0,0,0,0.08);
+  }
+
+  .widget-header {
+    background: var(--red);
+    padding: 1.1rem 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .header-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    color: var(--white);
+    line-height: 1.2;
+    text-align: center;
+  }
+  .header-sub {
+    font-size: 12px;
+    color: rgba(255,255,255,0.92);
+    text-align: center;
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .steps-bar {
+    display: flex;
+    padding: 1.25rem 2rem;
+    border-bottom: 1px solid var(--gray-100);
+    gap: 0;
+  }
+  .step-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    position: relative;
+  }
+  .step-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 13px; left: 55%;
+    width: 90%; height: 1px;
+    background: var(--gray-300);
+  }
+  .step-item.done:not(:last-child)::after,
+  .step-item.active:not(:last-child)::after {
+    background: var(--red);
+  }
+  .step-dot {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--gray-100);
+    border: 2px solid var(--gray-300);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: var(--gray-500);
+    transition: all 0.2s;
+    z-index: 1;
+  }
+  .step-item.active .step-dot {
+    background: var(--red);
+    border-color: var(--red);
+    color: white;
+  }
+  .step-item.done .step-dot {
+    background: var(--red-light);
+    border-color: var(--red);
+    color: var(--red);
+  }
+  .step-label {
+    font-size: 10px;
+    color: var(--gray-500);
+    text-align: center;
+    font-weight: 500;
+  }
+  .step-item.active .step-label { color: var(--red); font-weight: 600; }
+  .step-item.done .step-label { color: var(--red); }
+
+  .widget-body { padding: 1.75rem 2rem 2rem; }
+
+  .screen { display: none; animation: fadeIn 0.25s ease; }
+  .screen.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .section-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gray-500);
+    margin-bottom: 10px;
+  }
+
+  .date-scroller {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 1.5rem;
+  }
+  .scroll-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid var(--gray-300);
+    background: var(--white);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    color: var(--gray-700);
+    font-size: 16px;
+    line-height: 1;
+  }
+  .scroll-btn:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+  .scroll-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .dates-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    flex: 1;
+  }
+  .date-card {
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    padding: 8px 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--white);
+  }
+  .date-card:hover { border-color: var(--red); background: var(--red-light); }
+  .date-card.selected { border-color: var(--red); background: var(--red-light); }
+  .date-card.selected .date-day { color: var(--red); }
+  .date-card.full { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+  .date-dow {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray-500);
+    margin-bottom: 2px;
+  }
+  .date-day {
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    color: var(--gray-900);
+    line-height: 1;
+  }
+  .date-mon {
+    font-size: 10px;
+    color: var(--gray-500);
+    margin-top: 2px;
+  }
+  .date-slots {
+    font-size: 9px;
+    color: var(--success);
+    margin-top: 3px;
+    font-weight: 500;
+  }
+  .date-slots.low { color: #d68910; }
+  .date-slots.none { color: var(--gray-500); }
+
+  .times-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 1.5rem;
+  }
+  .time-btn {
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    background: var(--white);
+    transition: all 0.15s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .time-btn:hover { border-color: var(--red); background: var(--red-light); }
+  .time-btn.selected { border-color: var(--red); background: var(--red-light); }
+  .time-name { font-size: 14px; font-weight: 500; color: var(--gray-900); }
+  .time-avail { font-size: 11px; color: var(--gray-500); }
+  .time-avail.low { color: #d68910; }
+
+  .form-group { margin-bottom: 1rem; }
+  .form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-700);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .form-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    color: var(--gray-900);
+    background: var(--white);
+    transition: border-color 0.15s;
+    outline: none;
+  }
+  .form-input:focus { border-color: var(--red); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-hint {
+    font-size: 11px;
+    color: var(--red-dark);
+    margin-top: 5px;
+    line-height: 1.4;
+  }
+  .form-error {
+    font-size: 11px;
+    color: var(--red);
+    margin-top: 5px;
+    font-weight: 500;
+  }
+  .form-input.error { border-color: var(--red); }
+
+  .summary-box {
+    background: var(--gray-100);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    margin-bottom: 1.5rem;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .summary-row .label { color: var(--gray-500); }
+  .summary-row .val { font-weight: 500; color: var(--gray-900); }
+  .summary-divider {
+    border: none;
+    border-top: 1px solid var(--gray-300);
+    margin: 8px 0;
+  }
+  .summary-total .label { font-weight: 600; color: var(--gray-900); }
+  .summary-total .val { font-weight: 700; color: var(--red); font-size: 16px; }
+
+  .btn-primary {
+    width: 100%;
+    padding: 14px;
+    background: var(--red);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary:hover { background: var(--red-dark); }
+  .btn-primary:active { transform: scale(0.99); }
+  .btn-primary:disabled { background: var(--gray-300); cursor: not-allowed; }
+
+  .btn-back {
+    background: none;
+    border: none;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: var(--gray-500);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 1.25rem;
+    padding: 0;
+  }
+  .btn-back:hover { color: var(--red); }
+
+  .secured-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--gray-500);
+  }
+  .secured-note svg { width: 12px; height: 12px; }
+
+  .post-pay-note {
+    margin-top: 1rem;
+    background: var(--red-light);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--red-dark);
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .widget-footer {
+    padding: 12px 2rem;
+    border-top: 1px solid var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--gray-500);
+  }
+  .widget-footer svg { width: 13px; height: 13px; }
+
+  .promo-banner {
+    background: #FFF5E6;
+    border-bottom: 1px solid #F5D9A8;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #8A5A00;
+    flex-wrap: wrap;
+  }
+  .promo-banner strong { color: #5C3D00; }
+  .promo-code-pill {
+    background: white;
+    border: 1px dashed #C99848;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-family: 'DM Sans', monospace;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #5C3D00;
+    font-size: 12px;
+  }
+  .promo-copy-btn {
+    background: none;
+    border: none;
+    color: #8A5A00;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    padding: 3px 6px;
+  }
+  .promo-copy-btn:hover { color: #5C3D00; }
+
+  .reviews-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-100);
+    font-size: 12px;
+    color: var(--gray-700);
+  }
+  .reviews-strip .stars { color: #F5B301; letter-spacing: 1px; font-size: 13px; }
+  .reviews-strip .rating { font-weight: 700; color: var(--gray-900); }
+  .reviews-strip .count { color: var(--gray-500); }
+</style>
+</head>
+<body>
+
+<div class="widget">
+
+  <div class="widget-header">
+    <div class="header-title">BLS Certification Schedule</div>
+    <div class="header-sub">📍 100 Barranca St #255-B, West Covina</div>
+  </div>
+
+  <div class="promo-banner">
+    <span>💰 <strong>Save $10</strong> with code</span>
+    <span class="promo-code-pill">HEALTHCARE10</span>
+    <button type="button" class="promo-copy-btn" onclick="copyPromo(this)">Copy</button>
+  </div>
+
+  <a class="reviews-strip" href="https://www.google.com/search?q=cpr+west+covina" target="_blank" rel="noopener" style="text-decoration:none;">
+    <span class="stars">★★★★★</span>
+    <span class="rating">4.9</span>
+    <span class="count">· 260+ Google Reviews</span>
+  </a>
+
+  <div class="steps-bar" id="stepsBar" style="display:none;">
+    <div class="step-item active" data-step="1">
+      <div class="step-dot">1</div>
+      <div class="step-label">Date</div>
+    </div>
+    <div class="step-item" data-step="2">
+      <div class="step-dot">2</div>
+      <div class="step-label">Time</div>
+    </div>
+    <div class="step-item" data-step="3">
+      <div class="step-dot">3</div>
+      <div class="step-label">Info</div>
+    </div>
+    <div class="step-item" data-step="4">
+      <div class="step-dot">4</div>
+      <div class="step-label">Pay</div>
+    </div>
+  </div>
+
+  <div class="widget-body">
+
+    <div class="screen active" id="screen1">
+      <div class="section-label">Select a date</div>
+      <div class="date-scroller">
+        <button class="scroll-btn" id="scrollPrev" onclick="scrollDates(-1)" disabled>&#8249;</button>
+        <div class="dates-grid" id="datesGrid"></div>
+        <button class="scroll-btn" id="scrollNext" onclick="scrollDates(1)">&#8250;</button>
+      </div>
+      <button class="btn-primary" id="btn1" disabled onclick="goTo(2)">
+        Continue to time selection →
+      </button>
+    </div>
+
+    <div class="screen" id="screen2">
+      <button class="btn-back" onclick="goTo(1)">← Back</button>
+      <div class="section-label">Select a time</div>
+      <div class="times-grid" id="timesGrid"></div>
+      <button class="btn-primary" id="btn2" disabled onclick="goTo(3)">
+        Continue to your info →
+      </button>
+    </div>
+
+    <div class="screen" id="screen3">
+      <button class="btn-back" onclick="goTo(2)">← Back</button>
+      <div class="section-label">Your information</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">First name</label>
+          <input class="form-input" type="text" id="firstName" placeholder="Jane" oninput="validateForm()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Last name</label>
+          <input class="form-input" type="text" id="lastName" placeholder="Smith" oninput="validateForm()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email address</label>
+        <input class="form-input" type="email" id="email" placeholder="jane@example.com" oninput="validateForm()" onpaste="blockPaste(event)">
+        <div class="form-hint">⚠️ Use the same email at Square checkout — that's how we send your booking confirmation.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm email</label>
+        <input class="form-input" type="email" id="emailConfirm" placeholder="Re-type your email" oninput="validateForm()" onpaste="blockPaste(event)">
+        <div class="form-error" id="emailMismatch" style="display:none;">Emails don't match.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone number</label>
+        <input class="form-input" type="tel" id="phone" placeholder="(555) 000-0000" oninput="validateForm()">
+      </div>
+
+      <button class="btn-primary" id="btn3" disabled onclick="goTo(4)">
+        Review &amp; pay →
+      </button>
+    </div>
+
+    <div class="screen" id="screen4">
+      <button class="btn-back" onclick="goTo(3)">← Back</button>
+      <div class="section-label">Review your booking</div>
+
+      <div class="summary-box">
+        <div class="summary-row">
+          <span class="label">Course</span>
+          <span class="val">BLS Certification</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">Location</span>
+          <span class="val">100 Barranca St #255-B, West Covina</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">Date</span>
+          <span class="val" id="summaryDate">—</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">Time</span>
+          <span class="val" id="summaryTime">—</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">Student</span>
+          <span class="val" id="summaryName">—</span>
+        </div>
+        <hr class="summary-divider">
+        <div class="summary-row summary-total">
+          <span class="label">Total due today</span>
+          <span class="val">$89.00</span>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="payBtn" onclick="initiatePayment()">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        Pay $89.00 with Square
+      </button>
+
+      <div class="secured-note">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Secured by Square
+      </div>
+
+      <div class="post-pay-note" id="postPayNote" style="display:none;">
+        Square has opened in a new tab. Complete payment there — you'll receive a confirmation email once it's processed.
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+const CONFIG = {
+  // ⚠️ This token is visible to anyone viewing widget source. Scope it to datastores:write only and rotate periodically.
+  dataStoreToken: '4317021d-3786-4640-8265-34e63c0aaa2e',
+  price: 89.00,
+  currency: 'USD',
+  squarePaymentUrl: 'https://square.link/u/1OV7zGhW',
+  makeWebhookUrl: 'https://hook.us2.make.com/cuw7w3u2o2r2vtumh9x9gog7dxi0b8f9',
+  weekdayTimes: [
+    { id: 'am', label: '10:00 AM', end: '12:00 PM', seats: 12 },
+    { id: 'pm', label: '6:00 PM', end: '8:00 PM', seats: 12 },
+  ],
+  saturdayTimes: [
+    { id: 'am', label: '10:00 AM', end: '12:00 PM', seats: 12 },
+  ],
+  daysAhead: 21,
+  bookedSeats: {}
+};
+
+let selectedDate = null;
+let selectedTime = null;
+let dateOffset = 0;
+const DAYS_PER_PAGE = 6;
+
+function getUpcomingDays() {
+  const days = [];
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  let d = new Date(today);
+  d.setDate(d.getDate() + 1);
+  for (let i = 0; i < CONFIG.daysAhead; i++) {
+    // Skip Sundays (day 0) — no classes
+    if (d.getDay() !== 0) days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return days;
+}
+
+function getTimesForDate(d) {
+  return d.getDay() === 6 ? CONFIG.saturdayTimes : CONFIG.weekdayTimes;
+}
+
+function formatDate(d) {
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function dateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function scrollDates(dir) {
+  const allDays = getUpcomingDays();
+  dateOffset = Math.max(0, Math.min(dateOffset + dir, allDays.length - DAYS_PER_PAGE));
+  buildDates();
+}
+
+function buildDates() {
+  const grid = document.getElementById('datesGrid');
+  const allDays = getUpcomingDays();
+  const pageDays = allDays.slice(dateOffset, dateOffset + DAYS_PER_PAGE);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dows = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  grid.innerHTML = '';
+
+  document.getElementById('scrollPrev').disabled = dateOffset === 0;
+  document.getElementById('scrollNext').disabled = dateOffset >= allDays.length - DAYS_PER_PAGE;
+
+  pageDays.forEach(day => {
+    const key = dateKey(day);
+    const times = getTimesForDate(day);
+    let totalSeats = 0, bookedTotal = 0;
+    times.forEach(t => {
+      totalSeats += t.seats;
+      bookedTotal += (CONFIG.bookedSeats[key + '_' + t.id] || 0);
+    });
+    const available = totalSeats - bookedTotal;
+    const isFull = available === 0;
+    let slotText = available + ' left';
+    let slotClass = 'date-slots';
+    if (available === 0) { slotText = 'Full'; slotClass = 'date-slots none'; }
+    else if (available <= 4) { slotClass = 'date-slots low'; }
+    const isSelected = selectedDate && dateKey(day) === dateKey(selectedDate);
+    const card = document.createElement('div');
+    card.className = 'date-card' + (isFull ? ' full' : '') + (isSelected ? ' selected' : '');
+    card.innerHTML = `
+      <div class="date-dow">${dows[day.getDay()]}</div>
+      <div class="date-day">${day.getDate()}</div>
+      <div class="date-mon">${months[day.getMonth()]}</div>
+    `;
+    if (!isFull) {
+      card.addEventListener('click', () => {
+        document.querySelectorAll('.date-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedDate = day;
+        document.getElementById('btn1').disabled = false;
+        trackEvent('bls_date_selected', { date: dateKey(day) });
+      });
+    }
+    grid.appendChild(card);
+  });
+}
+
+function buildTimes() {
+  const grid = document.getElementById('timesGrid');
+  grid.innerHTML = '';
+  if (!selectedDate) return;
+  selectedTime = null;
+  document.getElementById('btn2').disabled = true;
+  const key = dateKey(selectedDate);
+  const times = getTimesForDate(selectedDate);
+  times.forEach(t => {
+    const booked = CONFIG.bookedSeats[key + '_' + t.id] || 0;
+    const available = t.seats - booked;
+    const isFull = available === 0;
+    let availText = isFull ? 'Full' : '';
+    let availClass = 'time-avail';
+    const btn = document.createElement('button');
+    btn.className = 'time-btn';
+    btn.disabled = isFull;
+    btn.innerHTML = `
+      <div>
+        <div class="time-name">${t.label}</div>
+        <div style="font-size:11px;color:var(--gray-500)">Until ${t.end}</div>
+      </div>
+      <div class="${availClass}">${availText}</div>
+    `;
+    if (!isFull) {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedTime = t;
+        document.getElementById('btn2').disabled = false;
+        trackEvent('bls_time_selected', { time: t.label });
+      });
+    }
+    grid.appendChild(btn);
+  });
+}
+
+function validateForm() {
+  const fn = document.getElementById('firstName').value.trim();
+  const ln = document.getElementById('lastName').value.trim();
+  const em = document.getElementById('email').value.trim();
+  const emc = document.getElementById('emailConfirm').value.trim();
+  const ph = document.getElementById('phone').value.trim();
+  const emailsMatch = em && emc && em.toLowerCase() === emc.toLowerCase();
+  const confirmEl = document.getElementById('emailConfirm');
+  const mismatchEl = document.getElementById('emailMismatch');
+  if (emc && !emailsMatch) {
+    confirmEl.classList.add('error');
+    mismatchEl.style.display = 'block';
+  } else {
+    confirmEl.classList.remove('error');
+    mismatchEl.style.display = 'none';
+  }
+  document.getElementById('btn3').disabled = !(fn && ln && em.includes('@') && emailsMatch && ph.length >= 7);
+}
+
+function blockPaste(e) {
+  e.preventDefault();
+}
+
+function updateSteps(n) {
+  document.querySelectorAll('.step-item').forEach(el => {
+    const s = parseInt(el.dataset.step);
+    el.classList.remove('active', 'done');
+    if (s === n) el.classList.add('active');
+    else if (s < n) el.classList.add('done');
+  });
+}
+
+function goTo(n) {
+  document.getElementById('stepsBar').style.display = (n === 1) ? 'none' : 'flex';
+  if (n === 2) buildTimes();
+  if (n === 4) {
+    document.getElementById('summaryDate').textContent = formatDate(selectedDate);
+    document.getElementById('summaryTime').textContent = selectedTime.label + ' – ' + selectedTime.end;
+    document.getElementById('summaryName').textContent =
+      document.getElementById('firstName').value + ' ' + document.getElementById('lastName').value;
+  }
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen' + n).classList.add('active');
+  updateSteps(n);
+}
+
+function initiatePayment() {
+  const firstName = document.getElementById('firstName').value.trim();
+  const lastName = document.getElementById('lastName').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const phone = document.getElementById('phone').value.trim();
+
+  // Ad-tracking params — read from URL on first visit, stored in sessionStorage so they survive
+  // page navigation. Used for Google Ads offline conversion uploads + dashboard attribution.
+  const __urlParams = new URLSearchParams(location.search);
+  const __getTrack = (key) => {
+    const v = __urlParams.get(key);
+    if (v) { try { sessionStorage.setItem('track_' + key, v); } catch(_) {} return v; }
+    try { return sessionStorage.getItem('track_' + key) || ''; } catch(_) { return ''; }
+  };
+  const trackGclid       = __getTrack('gclid');
+  const trackUtmSource   = __getTrack('utm_source');
+  const trackUtmCampaign = __getTrack('utm_campaign');
+  const trackUtmMedium   = __getTrack('utm_medium');
+  const trackUtmContent  = __getTrack('utm_content');
+  const trackUtmTerm     = __getTrack('utm_term');
+  const trackLandingUrl  = (() => { try { return sessionStorage.getItem('landing_url') || location.href; } catch(_) { return location.href; } })();
+  try { if (!sessionStorage.getItem('landing_url')) sessionStorage.setItem('landing_url', location.href); } catch(_) {}
+
+  const booking_id = 'bls-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  const booking = {
+    ref: 'bls-booking',
+    course_type: 'bls',
+    booking_id: booking_id,
+    date: dateKey(selectedDate),
+    date_formatted: formatDate(selectedDate),
+    time_id: selectedTime.id,
+    time_label: selectedTime.label,
+    time_end: selectedTime.end,
+    first_name: firstName,
+    last_name: lastName,
+    full_name: firstName + ' ' + lastName,
+    email: email,
+    phone: phone,
+    total: CONFIG.price.toFixed(2),
+    currency: CONFIG.currency,
+    square_url: CONFIG.squarePaymentUrl,
+    location: '100 Barranca St #255-B, West Covina, CA 91791',
+    submitted_at: new Date().toISOString(),
+    gclid: trackGclid,
+    utm_source: trackUtmSource,
+    utm_campaign: trackUtmCampaign,
+    utm_medium: trackUtmMedium,
+    utm_content: trackUtmContent,
+    utm_term: trackUtmTerm,
+    landing_url: trackLandingUrl,
+  };
+
+  // Fire to Make.com webhook (sends nudge email + admin alert)
+  fetch(CONFIG.makeWebhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(booking),
+  }).catch(() => {});
+
+  // Also write directly to Make Data Store (so it appears on the team dashboard immediately)
+  fetch('https://us2.make.com/api/v2/data-stores/100809/data/' + encodeURIComponent(booking_id) + '?teamId=2313459', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Token ' + CONFIG.dataStoreToken,
+    },
+    body: JSON.stringify({
+      email: email,
+      first_name: firstName,
+      last_name: lastName,
+      phone: phone,
+      date: booking.date,
+      date_formatted: booking.date_formatted,
+      time_label: booking.time_label,
+      time_end: booking.time_end,
+      location: booking.location,
+      booking_id: booking_id,
+      submitted_at: booking.submitted_at,
+      status: 'pending',
+      course_type: 'bls',
+      square_payment_id: '',
+      source: new URLSearchParams(location.search).get('src') || 'paid_ad',
+      gclid: trackGclid,
+      utm_source: trackUtmSource,
+      utm_campaign: trackUtmCampaign,
+      utm_medium: trackUtmMedium,
+      utm_content: trackUtmContent,
+      utm_term: trackUtmTerm,
+      landing_url: trackLandingUrl,
+    }),
+  }).catch(() => {});
+
+  trackEvent('bls_pay_clicked', {
+    value: CONFIG.price,
+    currency: CONFIG.currency,
+    date: booking.date,
+    time: booking.time_label,
+  });
+
+  window.open(CONFIG.squarePaymentUrl, '_blank');
+  document.getElementById('postPayNote').style.display = 'block';
+}
+
+function trackEvent(name, params) {
+  try {
+    if (typeof gtag === 'function') gtag('event', name, params || {});
+  } catch (e) {}
+}
+
+function postHeightToParent() {
+  if (window.parent === window) return;
+  const h = document.querySelector('.widget').getBoundingClientRect().height;
+  window.parent.postMessage({ type: 'bls-widget-resize', height: Math.ceil(h) }, '*');
+}
+
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(() => postHeightToParent());
+  ro.observe(document.querySelector('.widget'));
+}
+window.addEventListener('load', postHeightToParent);
+
+function copyPromo(btn) {
+  navigator.clipboard.writeText('HEALTHCARE10').then(() => {
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  });
+}
+
+buildDates();
+</script>
+</body>
+</html>

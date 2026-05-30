@@ -1354,6 +1354,7 @@
     <div class="tab" data-tab="revenue" onclick="switchTab('revenue')">💰 Revenue</div>
     <div class="tab" data-tab="students" onclick="switchTab('students')">👥 Students</div>
     <div class="tab" data-tab="renewals" onclick="switchTab('renewals')">🔄 Renewals <span class="badge" id="renewalsBadge" style="display:none;">0</span></div>
+    <div class="tab" data-tab="campaigns" onclick="switchTab('campaigns')">📣 Campaigns</div>
     <div class="tab" data-tab="pipeline" onclick="switchTab('pipeline')">⚡ Pipeline <span class="badge" id="pipelineLive" style="display:none;background:var(--green);">LIVE</span></div>
     <div class="tab" data-tab="todo" onclick="switchTab('todo')">✅ TODO <span class="badge" id="todoBadge" style="display:none;background:var(--orange);">0</span></div>
     <div class="tab" data-tab="quest" onclick="switchTab('quest')">🎮 Lead Quest</div>
@@ -1621,6 +1622,34 @@
           <p class="small" style="margin-bottom:12px;">Last 10 records, newest first.</p>
           <div id="rawRecords"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- CAMPAIGNS TAB -->
+    <div class="page" id="page-campaigns">
+      <div id="campaignStatus"></div>
+      <div class="card">
+        <h2 style="margin-top:0;">📣 New Broadcast</h2>
+        <p style="color:var(--gray-500);font-size:13px;margin-bottom:16px;">Send a newsletter-style update to all students. Drips out at <strong>150/day</strong> (Gmail-safe), skips anyone who unsubscribed. Every email gets your socials/app footer + an unsubscribe link automatically.</p>
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:4px;">Subject</label>
+        <input id="campSubject" class="search-input" style="width:100%;margin-bottom:14px;" placeholder="e.g. New ACLS dates + we're on Instagram now!" />
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:4px;">Headline</label>
+        <input id="campHeadline" class="search-input" style="width:100%;margin-bottom:14px;" placeholder="Big news this month" />
+        <label style="display:block;font-size:12px;font-weight:700;color:var(--gray-700);margin-bottom:4px;">Body</label>
+        <textarea id="campBody" style="width:100%;min-height:160px;padding:10px;border:1px solid var(--gray-200);border-radius:8px;font-family:inherit;font-size:14px;margin-bottom:14px;" placeholder="Write your update here. Plain text — line breaks become paragraphs."></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+          <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">Instagram URL</label><input id="campIg" class="search-input" style="width:100%;" placeholder="https://instagram.com/..." /></div>
+          <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">Facebook URL</label><input id="campFb" class="search-input" style="width:100%;" placeholder="https://facebook.com/..." /></div>
+          <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">App Store URL</label><input id="campApp" class="search-input" style="width:100%;" placeholder="https://apps.apple.com/..." /></div>
+          <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">Google Play URL</label><input id="campPlay" class="search-input" style="width:100%;" placeholder="https://play.google.com/..." /></div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+          <button class="btn" onclick="campaignPreview()">👁 Preview</button>
+          <button class="btn" onclick="campaignSendTest()">📧 Send test to me</button>
+          <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);font-weight:700;" onclick="campaignActivate()">🚀 Activate broadcast</button>
+          <span id="campAudience" style="font-size:13px;color:var(--gray-700);"></span>
+        </div>
+        <div id="campPreview" style="margin-top:16px;"></div>
       </div>
     </div>
 
@@ -1954,9 +1983,11 @@ async function loadAll() {
       offset += 100;
       if (offset >= 10000) break;           // safety stop at 10k records
     }
-    // Capture the synthetic watchdog record (no email → excluded from RECORDS) before filtering
+    // Capture the synthetic watchdog + campaign records (no email → excluded from RECORDS) before filtering
     const wdRec = all.find(r => r.key === '__watchdog__' || r.data?.status === 'watchdog');
     WATCHDOG_REC = wdRec ? wdRec.data : null;
+    const campRec = all.find(r => r.key === '__campaign__' || r.data?.status === 'campaign');
+    window.__campaignRec = campRec ? campRec.data : null;
     RECORDS = all.filter(r => r.data && r.data.email && r.data.status !== 'anchor');
     render();
     document.getElementById('lastUpdated').textContent = 'Last updated ' + new Date().toLocaleTimeString() + ' (' + RECORDS.length + ' records)';
@@ -2043,6 +2074,7 @@ function render() {
   if (currentTab === 'revenue') renderRevenue();
   if (currentTab === 'students') renderStudents();
   if (currentTab === 'renewals') renderRenewalsPage();
+  if (currentTab === 'campaigns') renderCampaigns();
   if (currentTab === 'pipeline') renderPipelinePage();
   if (currentTab === 'todo') loadTodo();
   if (currentTab === 'quest') renderQuest();
@@ -3585,6 +3617,115 @@ function updateRenewalScoreboard() {
       <div class="val" style="font-size:22px;">${s.val}</div>
       <div class="sub">${s.sub}</div>
     </div>`).join('');
+}
+
+// ===== CAMPAIGNS (broadcast newsletter) =====
+const BROADCAST_HOOK_URL = 'https://hook.us2.make.com/hsrr8ei1zmvaphnujn46fwmv9s16hj01';
+
+// Unique, reachable audience: distinct emails, not opted out
+function campaignAudience() {
+  const set = new Set();
+  RECORDS.forEach(r => {
+    const e = (r.data.email || '').toLowerCase();
+    if (e && r.data.email_optout !== 'yes' && r.data.status !== 'campaign' && r.data.status !== 'watchdog') set.add(e);
+  });
+  return set;
+}
+
+// Assemble the branded HTML body from the compose fields
+function assembleCampaignHtml() {
+  const headline = (document.getElementById('campHeadline').value || '').trim();
+  const body = (document.getElementById('campBody').value || '').trim();
+  const ig = document.getElementById('campIg').value.trim();
+  const fb = document.getElementById('campFb').value.trim();
+  const app = document.getElementById('campApp').value.trim();
+  const play = document.getElementById('campPlay').value.trim();
+  const paras = body.split(/\n{2,}/).map(p => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#333;">${escapeHtml(p).replace(/\n/g,'<br>')}</p>`).join('');
+  const social = [];
+  if (ig)  social.push(`<a href="${escapeHtml(ig)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">Instagram</a>`);
+  if (fb)  social.push(`<a href="${escapeHtml(fb)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">Facebook</a>`);
+  if (app) social.push(`<a href="${escapeHtml(app)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">App Store</a>`);
+  if (play)social.push(`<a href="${escapeHtml(play)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">Google Play</a>`);
+  const socialRow = social.length ? `<div style="text-align:center;margin:24px 0 8px;padding-top:16px;border-top:1px solid #eee;"><div style="font-size:13px;color:#555;margin-bottom:8px;">Stay connected 👇</div>${social.join('')}</div>` : '';
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;color:#1a1a1a;padding:28px 24px;">
+    ${headline ? `<h1 style="margin:0 0 16px;font-size:24px;color:#243B5A;line-height:1.25;">${escapeHtml(headline)}</h1>` : ''}
+    ${paras}
+    ${socialRow}
+  </div>`;
+}
+
+function campaignSaveSocials() {
+  ['Ig','Fb','App','Play'].forEach(k => localStorage.setItem('camp'+k, document.getElementById('camp'+k).value));
+}
+function campaignPreview() {
+  document.getElementById('campPreview').innerHTML = `<div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;"><div style="background:var(--gray-100);padding:8px 12px;font-size:12px;color:var(--gray-700);"><strong>Subject:</strong> ${escapeHtml(document.getElementById('campSubject').value||'(none)')}</div>${assembleCampaignHtml()}<div style="padding:10px 24px;font-size:11px;color:#999;text-align:center;border-top:1px solid #eee;">…footer + Unsubscribe link auto-appended per recipient</div></div>`;
+}
+async function campaignSendTest() {
+  campaignSaveSocials();
+  const to = prompt('Send a test to which email?', 'jayalcalde93@gmail.com');
+  if (!to) return;
+  const subject = document.getElementById('campSubject').value || 'News from CPR West Covina';
+  const html = assembleCampaignHtml() + `<div style="margin-top:28px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#999;text-align:center;">CPR West Covina · West Covina, CA · <a href="#" style="color:#999;">Unsubscribe</a></div>`;
+  try {
+    await fetch(BROADCAST_HOOK_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: to, subject, html }) });
+    alert('✓ Test sent to ' + to + ' — arrives within ~30s.');
+  } catch (e) { alert('Failed: ' + e.message); }
+}
+async function campaignActivate() {
+  campaignSaveSocials();
+  const subject = document.getElementById('campSubject').value.trim();
+  const body = document.getElementById('campBody').value.trim();
+  if (!subject || !body) { alert('Add a subject and body first.'); return; }
+  const audience = campaignAudience().size;
+  const days = Math.ceil(audience / 150);
+  if (!confirm(`Activate this broadcast?\n\nIt will send to ${audience} students at 150/day (~${days} day${days>1?'s':''} to finish), starting on the next 9 AM run. Unsubscribers are skipped.\n\nSubject: "${subject}"`)) return;
+  const id = 'bc-' + new Date().toISOString().slice(0,16).replace(/[-:T]/g,'');
+  const campaign = { id, subject, html: assembleCampaignHtml(), active: true, createdAt: new Date().toISOString(), audience };
+  // delete-then-create (strict schema: store JSON in landing_url, status='campaign')
+  try {
+    await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data?teamId=${CONFIG.teamId}`, { method:'DELETE', headers:{'Authorization':authHeader(),'Content-Type':'application/json'}, body: JSON.stringify({ keys:['__campaign__'] }) }).catch(()=>{});
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data?teamId=${CONFIG.teamId}`, { method:'POST', headers:{'Authorization':authHeader(),'Content-Type':'application/json'}, body: JSON.stringify({ key:'__campaign__', data:{ status:'campaign', submitted_at: campaign.createdAt, landing_url: JSON.stringify(campaign) } }) });
+    if (!res.ok) throw new Error('save failed ' + res.status);
+    alert(`🚀 Broadcast activated! First 150 go out on the next 9 AM run.`);
+    loadAll();
+  } catch (e) { alert('Failed to activate: ' + e.message); }
+}
+async function campaignPause() {
+  if (!confirm('Pause the active broadcast? No more emails will send until you reactivate.')) return;
+  try {
+    const r = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data?teamId=${CONFIG.teamId}&pg%5Blimit%5D=100`);
+    // find via full load instead
+  } catch(e) {}
+  // Simplest: rewrite campaign with active:false using WATCHDOG-style read from RECORDS-adjacent
+  const rec = window.__campaignRec;
+  if (!rec) { alert('No active campaign.'); return; }
+  const c = JSON.parse(rec.landing_url); c.active = false;
+  await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data?teamId=${CONFIG.teamId}`, { method:'DELETE', headers:{'Authorization':authHeader(),'Content-Type':'application/json'}, body: JSON.stringify({ keys:['__campaign__'] }) }).catch(()=>{});
+  await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data?teamId=${CONFIG.teamId}`, { method:'POST', headers:{'Authorization':authHeader(),'Content-Type':'application/json'}, body: JSON.stringify({ key:'__campaign__', data:{ status:'campaign', submitted_at:c.createdAt, landing_url: JSON.stringify(c) } }) });
+  alert('Broadcast paused.'); loadAll();
+}
+function renderCampaigns() {
+  // prefill saved socials
+  ['Ig','Fb','App','Play'].forEach(k => { const el=document.getElementById('camp'+k); if (el && !el.value) el.value = localStorage.getItem('camp'+k) || ''; });
+  const audience = campaignAudience().size;
+  document.getElementById('campAudience').textContent = `Audience: ${audience} students`;
+  // Active campaign status (read the __campaign__ record from the full fetch)
+  const statusEl = document.getElementById('campaignStatus');
+  let rec = null;
+  try { rec = window.__campaignRec || null; } catch(e){}
+  if (rec && rec.landing_url) {
+    const c = JSON.parse(rec.landing_url);
+    const sentCount = RECORDS.filter(r => r.data.last_broadcast_id === c.id).length;
+    const total = c.audience || audience;
+    statusEl.innerHTML = `<div class="card" style="border-left:4px solid ${c.active?'var(--green)':'var(--gray-300)'};">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <div><strong>${c.active?'🟢 Active broadcast':'⏸ Paused broadcast'}</strong> — "${escapeHtml(c.subject)}"<br>
+        <span style="font-size:12px;color:var(--gray-500);">Sent ${sentCount} / ${total} · 150/day · started ${fmtDate((c.createdAt||'').slice(0,10))}</span></div>
+        ${c.active?`<button class="btn" onclick="campaignPause()">⏸ Pause</button>`:''}
+      </div></div>`;
+  } else {
+    statusEl.innerHTML = '';
+  }
 }
 
 // Lead follow-up watchdog — verifies the T+2hr email, T+24hr SMS, Day-5 and Day-7 touches are firing.
