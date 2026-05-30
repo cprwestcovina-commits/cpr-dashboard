@@ -1654,10 +1654,24 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
           <button class="btn" onclick="campaignPreview()">👁 Preview</button>
           <button class="btn" onclick="campaignSendTest()">📧 Send test to me</button>
-          <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);font-weight:700;" onclick="campaignActivate()">🚀 Activate broadcast</button>
+          <input type="date" id="campDate" class="search-input" style="width:auto;" />
+          <button class="btn" style="background:#243B5A;color:#fff;border-color:#243B5A;font-weight:700;" onclick="addToMonthPlan()">➕ Add to month plan</button>
           <span id="campAudience" style="font-size:13px;color:var(--gray-700);"></span>
         </div>
         <div id="campPreview" style="margin-top:16px;"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <h2 style="margin:0;">📅 This Month's Plan</h2>
+          <div style="display:flex;gap:6px;">
+            <button class="btn" onclick="syncBrevoContacts()" title="Push your student list into Brevo">🔄 Sync contacts</button>
+            <button class="btn" style="background:var(--green);color:#fff;border-color:var(--green);font-weight:700;" onclick="scheduleMonthInBrevo()">🚀 Schedule in Brevo</button>
+          </div>
+        </div>
+        <p style="color:var(--gray-500);font-size:13px;margin:6px 0 14px;">Build up to 3 emails, give each a send date, then <strong>Schedule in Brevo</strong> — Brevo sends each to your whole list on its date (handles delivery + unsubscribes). Do a month in one sitting.</p>
+        <div id="brevoStatus" style="font-size:12px;color:var(--gray-600);margin-bottom:10px;"></div>
+        <div id="monthPlan"></div>
       </div>
     </div>
 
@@ -3795,8 +3809,67 @@ async function generateTemplatesNow() {
   } catch (e) { host.innerHTML = `<div class="empty" style="grid-column:1/-1;color:#b91c1c;">Failed: ${escapeHtml(e.message)}</div>`; }
 }
 
+// ===== Monthly plan (Brevo-scheduled broadcasts) =====
+const BREVO_SYNC_API = 'https://cpr-dashboard-cprwc.vercel.app/api/brevo-sync';
+const BREVO_CAMPAIGN_API = 'https://cpr-dashboard-cprwc.vercel.app/api/brevo-campaign';
+function getMonthPlan() { try { return JSON.parse(localStorage.getItem('campMonthPlan') || '[]'); } catch(e){ return []; } }
+function saveMonthPlan(p) { localStorage.setItem('campMonthPlan', JSON.stringify(p)); }
+function addToMonthPlan() {
+  const subject = document.getElementById('campSubject').value.trim();
+  const date = document.getElementById('campDate').value;
+  const body = document.getElementById('campBody').value.trim();
+  if (!subject || !body) { alert('Add a subject and body first.'); return; }
+  if (!date) { alert('Pick a send date for this email.'); return; }
+  const plan = getMonthPlan();
+  if (plan.length >= 3) { alert('Month plan is full (3 emails). Remove one first.'); return; }
+  plan.push({ subject, html: assembleCampaignHtml(), sendDate: date });
+  plan.sort((a,b) => a.sendDate.localeCompare(b.sendDate));
+  saveMonthPlan(plan);
+  renderMonthPlan();
+  alert(`Added "${subject}" for ${date}. (${plan.length}/3 in plan)`);
+}
+function removeFromPlan(i) { const p = getMonthPlan(); p.splice(i,1); saveMonthPlan(p); renderMonthPlan(); }
+function renderMonthPlan() {
+  const host = document.getElementById('monthPlan');
+  if (!host) return;
+  const plan = getMonthPlan();
+  if (!plan.length) { host.innerHTML = '<div class="empty">No emails planned yet. Build one above, set a date, and click "Add to month plan".</div>'; return; }
+  host.innerHTML = plan.map((p,i) => `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--gray-200);border-radius:8px;padding:10px 12px;margin-bottom:8px;">
+      <div><strong>${escapeHtml(p.subject)}</strong><br><span style="font-size:12px;color:var(--gray-500);">📅 Sends ${escapeHtml(fmtDate(p.sendDate))} · to your full list</span></div>
+      <button class="btn" style="font-size:12px;background:#fef2f2;color:#b91c1c;border-color:#fecaca;" onclick="removeFromPlan(${i})">Remove</button>
+    </div>`).join('');
+}
+async function syncBrevoContacts() {
+  const el = document.getElementById('brevoStatus');
+  el.textContent = '🔄 Syncing contacts to Brevo…';
+  try {
+    const r = await fetch(BREVO_SYNC_API); const d = await r.json();
+    if (d.error) { el.innerHTML = `<span style="color:#b91c1c;">${escapeHtml(d.error)}</span>`; return; }
+    el.textContent = `✓ ${d.imported} contacts synced to Brevo (list #${d.listId}).`;
+  } catch (e) { el.innerHTML = `<span style="color:#b91c1c;">Sync failed: ${escapeHtml(e.message)}</span>`; }
+}
+async function scheduleMonthInBrevo() {
+  const plan = getMonthPlan();
+  if (!plan.length) { alert('Add at least one email to the plan first.'); return; }
+  if (!confirm(`Schedule ${plan.length} email(s) in Brevo to send to your full list on their dates?\n\n${plan.map(p=>`• ${p.sendDate} — ${p.subject}`).join('\n')}`)) return;
+  const el = document.getElementById('brevoStatus');
+  el.textContent = '🚀 Scheduling in Brevo…';
+  let done = 0, fails = [];
+  for (const p of plan) {
+    try {
+      const r = await fetch(BREVO_CAMPAIGN_API, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(p) });
+      const d = await r.json();
+      if (d.ok) done++; else fails.push(`${p.subject}: ${d.error||'failed'}`);
+    } catch (e) { fails.push(`${p.subject}: ${e.message}`); }
+  }
+  if (fails.length) { el.innerHTML = `<span style="color:#b91c1c;">Scheduled ${done}, ${fails.length} failed:<br>${fails.map(escapeHtml).join('<br>')}</span>`; }
+  else { el.innerHTML = `<span style="color:#15803d;">✓ All ${done} scheduled in Brevo! They'll send on their dates.</span>`; saveMonthPlan([]); renderMonthPlan(); }
+}
+
 function renderCampaigns() {
   renderWeeklyIdeas();
+  renderMonthPlan();
   // prefill socials: saved value if any, else your real defaults
   ['Ig','Fb','Yt','App'].forEach(k => { const el=document.getElementById('camp'+k); if (el && !el.value) el.value = localStorage.getItem('camp'+k) || DEFAULT_SOCIALS[k] || ''; });
   const audience = campaignAudience().size;
