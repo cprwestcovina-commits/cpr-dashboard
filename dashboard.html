@@ -1535,7 +1535,7 @@
       </div>
       <div class="grid-2">
         <div class="card">
-          <h2>By Course Type (this month)</h2>
+          <h2>First-time vs Renewal (this month)</h2>
           <div id="courseBreakdown"></div>
         </div>
         <div class="card">
@@ -2490,20 +2490,24 @@ function renderRevenue() {
     </div>`;
   }).join('');
 
-  // Course breakdown this month
-  const blsThisMonth = thisMonth.filter(r => r.data.course_type !== 'renewal').length;
-  const rnwThisMonth = thisMonth.filter(r => r.data.course_type === 'renewal').length;
-  const totalThis = blsThisMonth + rnwThisMonth || 1;
+  // First-time vs Renewal this month — split by renewal attribution (src=renewal or contacted-in-cadence),
+  // NOT by course_type (renewals book as regular BLS classes). Uses actual paid amounts.
+  const contactedRev = buildRenewalContactedMap();
+  const rnwList = thisMonth.filter(r => isRenewalWin(r, contactedRev));
+  const firstList = thisMonth.filter(r => !isRenewalWin(r, contactedRev));
+  const firstRev = firstList.reduce((s,r)=>s+amountFor(r),0);
+  const rnwRev = rnwList.reduce((s,r)=>s+amountFor(r),0);
+  const totalThis = firstList.length + rnwList.length || 1;
   document.getElementById('courseBreakdown').innerHTML = `
     <div class="bar-row">
-      <div class="bar-label">BLS</div>
-      <div class="bar"><div class="bar-fill" style="width:${100 * blsThisMonth / totalThis}%;"></div></div>
-      <div class="bar-val">${blsThisMonth} · $${(blsThisMonth*CONFIG.pricePerBooking).toLocaleString()}</div>
+      <div class="bar-label">First-time</div>
+      <div class="bar"><div class="bar-fill" style="width:${100 * firstList.length / totalThis}%;"></div></div>
+      <div class="bar-val">${firstList.length} · $${firstRev.toLocaleString()}</div>
     </div>
     <div class="bar-row">
       <div class="bar-label">Renewal</div>
-      <div class="bar"><div class="bar-fill renewal" style="width:${100 * rnwThisMonth / totalThis}%;"></div></div>
-      <div class="bar-val">${rnwThisMonth} · $${(rnwThisMonth*CONFIG.pricePerBooking).toLocaleString()}</div>
+      <div class="bar"><div class="bar-fill renewal" style="width:${100 * rnwList.length / totalThis}%;"></div></div>
+      <div class="bar-val">${rnwList.length} · $${rnwRev.toLocaleString()}</div>
     </div>`;
 
   // Funnel
