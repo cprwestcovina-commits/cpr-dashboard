@@ -1799,6 +1799,7 @@ const CONFIG = {
 var MAKE_TOKEN = null;
 var DASHBOARD_PW = null;
 var RECORDS = [];
+var WATCHDOG_REC = null;  // synthetic __watchdog__ record (health blob in landing_url), captured in loadAll
 var calendarMonth = new Date();
 var studentFilter = 'all';
 var sourceFilter = 'all';            // Calendar tab source filter
@@ -1950,6 +1951,9 @@ async function loadAll() {
       offset += 100;
       if (offset >= 10000) break;           // safety stop at 10k records
     }
+    // Capture the synthetic watchdog record (no email → excluded from RECORDS) before filtering
+    const wdRec = all.find(r => r.key === '__watchdog__' || r.data?.status === 'watchdog');
+    WATCHDOG_REC = wdRec ? wdRec.data : null;
     RECORDS = all.filter(r => r.data && r.data.email && r.data.status !== 'anchor');
     render();
     document.getElementById('lastUpdated').textContent = 'Last updated ' + new Date().toLocaleTimeString() + ' (' + RECORDS.length + ' records)';
@@ -3438,12 +3442,10 @@ async function updateRenewalWatchdog(rows) {
     if (r.daysUntil <= 7 && r.data.renewal_t90_sent !== 'yes' && r.data.renewal_t60_sent !== 'yes' && r.data.renewal_t30_sent !== 'yes') missed++;
   });
 
-  // --- Server-side watchdog record: cron freshness + last-run send failures ---
+  // --- Server-side watchdog record (captured in loadAll): cron freshness + last-run send failures ---
   let wd = null, ageMin = null;
   try {
-    const r = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent('__watchdog__')}?teamId=${CONFIG.teamId}`);
-    const rec = (r && (r.record?.data || r.data)) || null;
-    wd = rec && rec.landing_url ? JSON.parse(rec.landing_url) : null;
+    wd = WATCHDOG_REC && WATCHDOG_REC.landing_url ? JSON.parse(WATCHDOG_REC.landing_url) : null;
     if (wd && wd.ts) ageMin = Math.round((Date.now() - new Date(wd.ts).getTime()) / 60000);
   } catch (e) { /* record may not exist until first cron run */ }
 
@@ -3546,12 +3548,10 @@ async function updateLeadsWatchdog() {
     if (a > 14*24) staleOld++;  // very old pending — Daily Dedup should have expired it
   });
 
-  // Server watchdog record: cron freshness + last-run send counts/errors/self-heal
+  // Server watchdog record (captured in loadAll): cron freshness + last-run send counts/errors/self-heal
   let wd = null, ageMin = null;
   try {
-    const r = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent('__watchdog__')}?teamId=${CONFIG.teamId}`);
-    const rec = (r && (r.record?.data || r.data)) || null;
-    wd = rec && rec.landing_url ? JSON.parse(rec.landing_url) : null;
+    wd = WATCHDOG_REC && WATCHDOG_REC.landing_url ? JSON.parse(WATCHDOG_REC.landing_url) : null;
     if (wd && wd.ts) ageMin = Math.round((now - new Date(wd.ts).getTime()) / 60000);
   } catch (e) {}
   const ageTxt = ageMin == null ? 'no run recorded yet' : ageMin < 60 ? `${ageMin} min ago` : `${(ageMin/60).toFixed(1)} hr ago`;
