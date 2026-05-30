@@ -23,7 +23,7 @@ const D5_EMAIL_HOOK = 'https://hook.us2.make.com/oxlc4vhndmrcj8x95cdoxje83akkhoi
 const RENEWAL_HOOK = 'https://hook.us2.make.com/zshj7d7mbz2y5glqxo3mka3w2q9irlms';
 const RENEWAL_CADENCE_HOOK = 'https://hook.us2.make.com/lpatwdhpp1aprx4h5gqi4hv1xdjiy5mc';
 const RENEWAL_DAILY_CAP = 0;    // PAUSED past-due (already-expired) outreach until approved
-const RENEWAL_CADENCE_CAP = 50; // upcoming-renewal cadence: max students contacted per day, closest-to-expiry first
+const RENEWAL_CADENCE_CAP = 25; // upcoming-renewal cadence: max students contacted per day, closest-to-expiry first
 // Upcoming-renewal touch days (before expiration). Tolerance: each lead matches if days_until ∈ [target-1, target+1].
 const RENEWAL_TOUCHES = [
   { days: 90, flag: 'renewal_t90_sent' },
