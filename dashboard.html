@@ -3273,18 +3273,16 @@ function renderRenewalsKanban(rows) {
     const s = renewalStageOf(r);
     if (byStage[s]) byStage[s].push(r);
   });
-  return `<div class="kanban-board">
+  return `<div class="kanban" style="grid-auto-flow:initial;grid-auto-columns:initial;grid-template-columns:repeat(${RENEWAL_STAGES.length},1fr);overflow-x:visible;">
     ${RENEWAL_STAGES.map(s => `
-      <div class="kanban-col">
-        <div class="kanban-col-header">
+      <div class="kb-col">
+        <div class="kb-col-header">
           <span>${s.label}</span>
-          <span class="count">${byStage[s.key].length}</span>
+          <span class="kb-col-count">${byStage[s.key].length}</span>
         </div>
-        <div class="kanban-col-body">
-          ${byStage[s.key].length
-            ? byStage[s.key].slice(0, 50).map(renewalCard).join('') + (byStage[s.key].length > 50 ? `<div style="text-align:center;color:#888;font-size:11px;padding:8px;">+ ${byStage[s.key].length - 50} more</div>` : '')
-            : '<div class="kanban-empty">empty</div>'}
-        </div>
+        ${byStage[s.key].length
+          ? byStage[s.key].slice(0, 50).map(renewalCard).join('') + (byStage[s.key].length > 50 ? `<div style="text-align:center;color:#888;font-size:11px;padding:8px;">+ ${byStage[s.key].length - 50} more</div>` : '')
+          : '<div style="font-size:11px;color:var(--gray-500);text-align:center;padding:20px 0;">empty</div>'}
       </div>
     `).join('')}
   </div>`;
@@ -3347,10 +3345,11 @@ function renderRenewalsPage() {
   document.getElementById('renewalsTabCount').textContent = rows.length;
   // Pipeline view: show only past-due (overdue) records in the kanban
   if (getRenewalsView() === 'kanban') {
-    const overdue = rows.filter(r => r.daysUntil < 0);
-    document.getElementById('renewalsList').innerHTML = overdue.length
-      ? `<p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">${overdue.length} past-due renewals (already expired). Sort: oldest first. Drag through stages or use the buttons.</p>` + renderRenewalsKanban(overdue)
-      : '<div class="empty">No past-due renewals yet. Once historical students cross their 2-year mark, they show here.</div>';
+    // Only people approaching renewal (within 90 days), not yet expired
+    const upcoming = rows.filter(r => r.daysUntil >= 0 && r.daysUntil <= 90);
+    document.getElementById('renewalsList').innerHTML = upcoming.length
+      ? `<p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">${upcoming.length} renewals within 90 days (soonest first). Already-expired students are excluded.</p>` + renderRenewalsKanban(upcoming)
+      : '<div class="empty">No renewals within the next 90 days. Students appear here as they approach their 2-year mark.</div>';
     return;
   }
   document.getElementById('renewalsList').innerHTML = rows.length
