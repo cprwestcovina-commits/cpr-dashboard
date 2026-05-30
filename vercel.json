@@ -5,6 +5,10 @@
     {
       "path": "/api/cron/cadence",
       "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/generate-templates",
+      "schedule": "0 16 * * 1"
     }
   ]
 }
