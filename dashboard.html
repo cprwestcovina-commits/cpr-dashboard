@@ -3680,10 +3680,12 @@ function assembleCampaignHtml() {
   if (yt)  social.push(`<a href="${escapeHtml(yt)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">YouTube</a>`);
   if (app) social.push(`<a href="${escapeHtml(app)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">Our App</a>`);
   const socialRow = social.length ? `<div style="text-align:center;margin:24px 0 8px;padding-top:16px;border-top:1px solid #eee;"><div style="font-size:13px;color:#555;margin-bottom:8px;">Stay connected 👇</div>${social.join('')}</div>` : '';
+  const signature = `<div style="margin-top:24px;"><table cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td align="center" style="padding:0;"><img src="https://cpr-dashboard-cprwc.vercel.app/signature.png" alt="Caroline Valera · CPR West Covina" width="480" style="max-width:100%;height:auto;display:block;border:0;outline:none;"/></td></tr></table></div>`;
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;color:#1a1a1a;padding:28px 24px;">
     ${headline ? `<h1 style="margin:0 0 16px;font-size:24px;color:#243B5A;line-height:1.25;">${escapeHtml(headline)}</h1>` : ''}
     ${renderBodyHtml(body)}
     ${socialRow}
+    ${signature}
   </div>`;
 }
 
