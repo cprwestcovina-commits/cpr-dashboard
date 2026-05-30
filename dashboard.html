@@ -2046,6 +2046,12 @@ function fmtDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
+// With the year — used for "last certified" dates (Students/Renewals) where the year matters
+function fmtDateY(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
 function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -2138,10 +2144,12 @@ function updateBadges() {
 function renderDashboard() {
   const t = today();
   const monthStart = t.slice(0,7) + '-01';
-  const confirmedThisMonth = RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date >= monthStart && r.data.date <= t.slice(0,7) + '-31');
+  // Operational widgets ignore bulk historical imports (they live in Renewals/Students).
+  const live = r => r.data.status === 'confirmed' && r.data.source !== 'historical_import';
+  const confirmedThisMonth = RECORDS.filter(r => live(r) && r.data.date >= monthStart && r.data.date <= t.slice(0,7) + '-31');
   const confirmedRevenueThisMonth = confirmedThisMonth.reduce((s, r) => s + amountFor(r), 0);
   const pending = RECORDS.filter(r => r.data.status === 'pending');
-  const todayCount = RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date === t).length;
+  const todayCount = RECORDS.filter(r => live(r) && r.data.date === t).length;
   const pendingRevenue = pending.reduce((s, r) => s + amountFor(r), 0);
   const stats = [
     { label: 'Today', val: todayCount, sub: 'confirmed classes' },
@@ -2159,7 +2167,7 @@ function renderDashboard() {
 
   // Today's list
   const todayRows = RECORDS
-    .filter(r => r.data.date === t && r.data.status === 'confirmed')
+    .filter(r => r.data.date === t && live(r))
     .sort((a,b) => (a.data.time_label||'').localeCompare(b.data.time_label||''));
   document.getElementById('todayCount').textContent = todayRows.length;
   document.getElementById('todayList').innerHTML = todayRows.length
@@ -2174,7 +2182,7 @@ function renderDashboard() {
 
   // This week
   const weekRows = RECORDS
-    .filter(r => r.data.status === 'confirmed' && r.data.date)
+    .filter(r => live(r) && r.data.date)
     .filter(r => { const d = daysFromNow(r.data.date); return d >= 0 && d <= 6; })
     .sort((a,b) => (a.data.date + (a.data.time_label||'')).localeCompare(b.data.date + (b.data.time_label||'')));
   document.getElementById('weekList').innerHTML = weekRows.length
@@ -2190,7 +2198,7 @@ function renderDashboard() {
   // Capacity
   const t2 = today();
   const slots = {};
-  RECORDS.filter(r => r.data.status === 'confirmed' && r.data.date >= t2).forEach(r => {
+  RECORDS.filter(r => live(r) && r.data.date >= t2).forEach(r => {
     const days = daysFromNow(r.data.date);
     if (days > 14) return;
     const key = r.data.date + '|' + (r.data.time_label || 'unknown');
@@ -2238,11 +2246,12 @@ function renderCalendarPage() {
   for (let d=1;d<=daysInMonth;d++) {
     const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = dateStr === t;
-    // Calendar shows ONLY confirmed bookings (paid or manually marked confirmed).
-    // Pending leads + cancelled + expired records stay off the calendar.
+    // Calendar shows ONLY confirmed bookings made through this system (widgets/manual).
+    // Bulk-imported historical students live in Renewals/Students — they stay OFF the class calendar.
     const dayBookings = RECORDS.filter(r =>
       r.data.date === dateStr
       && r.data.status === 'confirmed'
+      && r.data.source !== 'historical_import'
       && (sourceFilter === 'all' || (r.data.source || 'paid_ad') === sourceFilter)
     );
     html += `<div class="cal-cell ${isToday?'today':''}">
@@ -2693,7 +2702,7 @@ function renderStudents() {
         <td><strong>${escapeHtml(r.data.first_name)} ${escapeHtml(r.data.last_name)}</strong></td>
         <td><a class="action-link" href="mailto:${escapeHtml(r.data.email)}">${escapeHtml(r.data.email)}</a></td>
         <td>${escapeHtml(r.data.phone || '')}</td>
-        <td>${escapeHtml(fmtDate(r.data.date))}<br><span class="small">${escapeHtml(r.data.time_label || '')}</span></td>
+        <td>${escapeHtml(fmtDateY(r.data.date))}<br><span class="small">${escapeHtml(r.data.time_label || '')}</span></td>
         <td>${statusPill(r.data.status)}</td>
         <td>${courseLabel(r.data.course_type)}</td>
         <td style="white-space:nowrap;">
@@ -2710,7 +2719,7 @@ var actionsKey = null;
 // Show all bookings for a given date in a modal
 function openDayDetail(dateStr) {
   const all = RECORDS
-    .filter(r => r.data.date === dateStr && r.data.status === 'confirmed')
+    .filter(r => r.data.date === dateStr && r.data.status === 'confirmed' && r.data.source !== 'historical_import')
     .sort((a,b) => (a.data.time_label || '').localeCompare(b.data.time_label || ''));
   if (!all.length) return;
   const niceDate = new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -3492,7 +3501,7 @@ function renewalCard(r) {
       <span style="color:${dueColor};margin-left:6px;font-weight:600;">${dueTxt}</span>
     </div>
     ${renewalCadenceStrip(r)}
-    <div style="font-size:11px;color:var(--gray-500);">Last class: ${escapeHtml(fmtDate(r.data.date))}</div>
+    <div style="font-size:11px;color:var(--gray-500);">Last class: ${escapeHtml(fmtDateY(r.data.date))}</div>
     <div style="margin-top:6px;font-size:12px;">
       <a href="mailto:${escapeHtml(r.data.email)}" class="action-link">${escapeHtml(r.data.email)}</a><br>
       ${r.data.phone ? `<a href="tel:${(r.data.phone||'').replace(/\D/g,'')}" class="action-link">${escapeHtml(r.data.phone)}</a>` : ''}
@@ -4166,8 +4175,8 @@ function renderRenewalsPage() {
             <a class="action-link" href="mailto:${escapeHtml(r.data.email)}">${escapeHtml(r.data.email)}</a><br>
             <span style="color:var(--gray-700);font-size:13px;">${escapeHtml(r.data.phone || '')}</span>
           </td>
-          <td>${escapeHtml(fmtDate(r.data.date))}</td>
-          <td><strong>${escapeHtml(fmtDate(r.renewalDate))}</strong></td>
+          <td>${escapeHtml(fmtDateY(r.data.date))}</td>
+          <td><strong>${escapeHtml(fmtDateY(r.renewalDate))}</strong></td>
           <td style="color:${r.color};">${dueLabel}</td>
         </tr>`;
       }).join('') + `</tbody></table>`
