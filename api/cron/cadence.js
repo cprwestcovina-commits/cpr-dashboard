@@ -102,6 +102,22 @@ async function patchFlag(key, fullData, additions) {
   return resp.ok;
 }
 
+// Upsert a record by key: PATCH if it exists, else POST to create.
+async function upsertRecord(key, data) {
+  let resp = await fetch(`${DS_URL}/${encodeURIComponent(key)}?teamId=${TEAM_ID}`, {
+    method: 'PATCH',
+    headers: { 'Authorization': `Token ${MAKE_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (resp.ok) return true;
+  resp = await fetch(`${DS_URL}?teamId=${TEAM_ID}`, {
+    method: 'POST',
+    headers: { 'Authorization': `Token ${MAKE_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, data }),
+  });
+  return resp.ok;
+}
+
 async function fireWebhook(url, payload) {
   try {
     const resp = await fetch(url, {
@@ -238,7 +254,20 @@ export default async function handler(req, res) {
   // Both email + SMS per touch.
   summary.renewalCadenceEmail = 0;
   summary.renewalCadenceSMS = 0;
-  const confirmedAll = all.filter(r => r.data?.status === 'confirmed' && r.data?.date);
+  summary.renewalEmailFail = 0;
+  summary.renewalSmsFail = 0;
+  // Dedup by email → keep ONLY each student's LATEST confirmed class as their renewal anchor.
+  // This guarantees that once someone pays for a new class, their newer booking (730 days out)
+  // becomes the anchor and they are NOT bothered about renewing again for ~2 years.
+  const anchorByEmail = new Map();
+  for (const r of all) {
+    if (r.data?.status !== 'confirmed' || !r.data?.date) continue;
+    const e = (r.data.email || '').toLowerCase();
+    const k = e || ('__noemail__' + r.key);  // emailless records kept individually
+    const ex = anchorByEmail.get(k);
+    if (!ex || r.data.date > ex.data.date) anchorByEmail.set(k, r);
+  }
+  const confirmedAll = [...anchorByEmail.values()];
   for (const lead of confirmedAll) {
     const d = lead.data;
     const classDate = new Date(d.date + 'T00:00:00').getTime();
@@ -265,6 +294,7 @@ export default async function handler(req, res) {
       if (payload.email) {
         emailOk = await fireWebhook(RENEWAL_CADENCE_HOOK, payload);
         if (emailOk) summary.renewalCadenceEmail++;
+        else { summary.renewalEmailFail++; summary.errors.push(`renewal-email T-${touch.days} ${payload.email}`); }
       }
       // SMS via GHL direct
       let smsOk = false;
@@ -279,8 +309,8 @@ export default async function handler(req, res) {
           if (r.ok) {
             smsOk = true;
             summary.renewalCadenceSMS++;
-          }
-        }
+          } else { summary.renewalSmsFail++; summary.errors.push(`renewal-sms T-${touch.days} ${payload.phone} (${r.status})`); }
+        } else { summary.renewalSmsFail++; summary.errors.push(`renewal-sms T-${touch.days} ${payload.phone} (GHL contact upsert failed)`); }
       }
       // Set flag only if at least one channel succeeded
       if (emailOk || smsOk) {
@@ -308,13 +338,56 @@ export default async function handler(req, res) {
     }
   }
 
+  // === Watchdog: compute health metrics over the deduped renewal anchors and persist them
+  // to a special datastore record (__watchdog__) so the dashboard can show real cron status,
+  // send failures, and data-integrity issues even when nothing is on screen. ===
+  let activeWindow = 0, dueNowBacklog = 0, missingEmailActive = 0, missingPhoneActive = 0, missedTouches = 0;
+  for (const lead of confirmedAll) {
+    const d = lead.data;
+    const exp = new Date(d.date + 'T00:00:00').getTime() + (2 * 365.25 * 86400000);
+    const du = Math.round((exp - Date.now()) / 86400000);
+    if (du < 0 || du > 91) continue;          // only students inside the active 90-day window
+    activeWindow++;
+    if (!d.email) missingEmailActive++;
+    if (!d.phone) missingPhoneActive++;
+    // A touch is "due" if its window is open and the flag isn't set yet
+    let isDue = false;
+    for (const t of RENEWAL_TOUCHES) {
+      if (Math.abs(du - t.days) <= 1 && d[t.flag] !== 'yes') { isDue = true; break; }
+    }
+    if (isDue) dueNowBacklog++;
+    // "missed": already past the 7-day mark but the earlier touches never fired (slipped through)
+    if (du <= 7 && d.renewal_t90_sent !== 'yes' && d.renewal_t60_sent !== 'yes' && d.renewal_t30_sent !== 'yes') missedTouches++;
+  }
+  const health = {
+    type: 'watchdog',
+    ts: new Date().toISOString(),
+    totalRecords: all.length,
+    confirmedAnchors: confirmedAll.length,
+    activeWindow,
+    dueNowBacklog,            // should be ~0 right after a healthy run
+    missingEmailActive,       // active-window students with no email (won't get cadence email)
+    missingPhoneActive,       // active-window students with no phone (won't get cadence SMS)
+    missedTouches,            // close to expiry but earlier touches never fired
+    sent: {
+      t2hr: summary.t2hr, t24hr: summary.t24hr, d5email: summary.d5email, d5sms: summary.d5sms,
+      renewalEmail: summary.renewalCadenceEmail, renewalSms: summary.renewalCadenceSMS,
+    },
+    fails: { renewalEmail: summary.renewalEmailFail, renewalSms: summary.renewalSmsFail },
+    errors: summary.errors.slice(0, 25),
+  };
+  let watchdogWritten = false;
+  try { watchdogWritten = await upsertRecord('__watchdog__', health); } catch (e) {}
+
   return res.status(200).json({
     ok: true,
-    ts: new Date().toISOString(),
+    ts: health.ts,
     totalRecords: all.length,
     totalPending: leads.length,
     confirmedTotal: confirmedAll.length,
     renewalEligible: renewalEligible.length,
     touched: summary,
+    health,
+    watchdogWritten,
   });
 }

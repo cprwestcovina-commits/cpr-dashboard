@@ -1611,9 +1611,16 @@
 
     <!-- RENEWALS TAB -->
     <div class="page" id="page-renewals">
-      <!-- Bulletproof renewal cadence status banner -->
-      <div id="renewalCronBanner" style="display:none;background:#F0FDF4;border:1px solid #16A34A;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#15803D;">
-        <strong>🛡 Bulletproof renewal cadence:</strong> <span id="renewalCronText">checking…</span>
+      <!-- Renewal cadence watchdog -->
+      <div id="renewalWatchdog" style="display:none;border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:13px;border:1px solid #16A34A;background:#F0FDF4;color:#15803D;">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;">
+          <span id="wdDot" style="width:10px;height:10px;border-radius:50%;background:#16A34A;display:inline-block;"></span>
+          <span id="wdTitle">🛡 Renewal Watchdog — checking…</span>
+          <span style="flex:1;"></span>
+          <span id="wdFresh" style="font-size:11px;font-weight:500;opacity:0.8;"></span>
+        </div>
+        <div id="wdChecks" style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;"></div>
+        <div id="wdErrors" style="margin-top:10px;"></div>
       </div>
 
       <div class="card">
@@ -3335,34 +3342,99 @@ function renderRenewalsKanban(rows) {
   </div>`;
 }
 
-async function updateRenewalCronBanner() {
-  // Pull the most recent run of any renewal cadence scenario as a freshness signal
-  const banner = document.getElementById('renewalCronBanner');
-  const text = document.getElementById('renewalCronText');
-  if (!banner || !text) return;
-  try {
-    const r = await apiGet(`/scenarios/5237696/logs?teamId=${CONFIG.teamId}&pg[limit]=1`);
-    const logs = r.scenarioLogs || [];
-    const lastTs = logs.length ? new Date(logs[0].timestamp).getTime() : 0;
-    const ageMin = lastTs ? Math.round((Date.now() - lastTs) / 60000) : null;
-    const ageTxt = ageMin == null ? 'never' : ageMin < 60 ? `${ageMin} min ago` : `${(ageMin/60).toFixed(1)} hr ago`;
-    banner.style.display = 'block';
-    if (ageMin == null || ageMin > 180) {
-      banner.style.background = '#FEF3C7'; banner.style.borderColor = '#F59E0B'; banner.style.color = '#92400E';
-      text.innerHTML = `Vercel Cron pings every 2 hr · 6-touch cadence at T-90/60/30/15/7/0 days · ⚠ Last fire <strong>${ageTxt}</strong>`;
-    } else {
-      banner.style.background = '#F0FDF4'; banner.style.borderColor = '#16A34A'; banner.style.color = '#15803D';
-      text.innerHTML = `Vercel Cron pings every 2 hr · 6-touch cadence at T-90/60/30/15/7/0 days · Last fire <strong>${ageTxt}</strong> · ✓ healthy`;
+// Severity helper: returns {bg,border,color,dot} for a status level
+const WD_LEVELS = {
+  ok:   { bg:'#F0FDF4', border:'#16A34A', color:'#15803D', dot:'#16A34A' },
+  warn: { bg:'#FFFBEB', border:'#F59E0B', color:'#92400E', dot:'#F59E0B' },
+  err:  { bg:'#FEF2F2', border:'#DC2626', color:'#991B1B', dot:'#DC2626' },
+};
+function wdCard(level, label, value, note) {
+  const c = WD_LEVELS[level];
+  const icon = level === 'ok' ? '✓' : (level === 'warn' ? '⚠' : '✕');
+  return `<div style="background:#fff;border:1px solid ${c.border}33;border-left:3px solid ${c.border};border-radius:6px;padding:8px 10px;">
+    <div style="font-size:11px;color:var(--gray-500);text-transform:uppercase;letter-spacing:.3px;">${label}</div>
+    <div style="font-size:15px;font-weight:700;color:${c.color};margin-top:2px;">${icon} ${value}</div>
+    ${note ? `<div style="font-size:10px;color:var(--gray-500);margin-top:1px;">${note}</div>` : ''}
+  </div>`;
+}
+
+async function updateRenewalWatchdog(rows) {
+  const box = document.getElementById('renewalWatchdog');
+  if (!box) return;
+  const dot = document.getElementById('wdDot');
+  const title = document.getElementById('wdTitle');
+  const fresh = document.getElementById('wdFresh');
+  const checksEl = document.getElementById('wdChecks');
+  const errEl = document.getElementById('wdErrors');
+  box.style.display = 'block';
+
+  // --- Client-side integrity checks on the loaded renewal anchors (immediate, no waiting on cron) ---
+  const active = rows.filter(r => r.daysUntil >= 0 && r.daysUntil <= 91);
+  let dueBacklog = 0, missingEmail = 0, missingPhone = 0, missed = 0;
+  active.forEach(r => {
+    if (!r.data.email) missingEmail++;
+    if (!r.data.phone) missingPhone++;
+    let due = false;
+    for (const t of RENEWAL_TOUCHES) {
+      if (Math.abs(r.daysUntil - t.days) <= 1 && r.data[t.flag] !== 'yes') { due = true; break; }
     }
-  } catch (e) {
-    banner.style.display = 'block';
-    banner.style.background = '#FEE2E2'; banner.style.borderColor = '#DC2626'; banner.style.color = '#991B1B';
-    text.innerHTML = '⚠ Could not fetch renewal cron status: ' + e.message;
-  }
+    if (due) dueBacklog++;
+    if (r.daysUntil <= 7 && r.data.renewal_t90_sent !== 'yes' && r.data.renewal_t60_sent !== 'yes' && r.data.renewal_t30_sent !== 'yes') missed++;
+  });
+
+  // --- Server-side watchdog record: cron freshness + last-run send failures ---
+  let wd = null, ageMin = null;
+  try {
+    const r = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent('__watchdog__')}?teamId=${CONFIG.teamId}`);
+    wd = (r && (r.record?.data || r.data)) || null;
+    if (wd && wd.ts) ageMin = Math.round((Date.now() - new Date(wd.ts).getTime()) / 60000);
+  } catch (e) { /* record may not exist until first cron run */ }
+
+  const ageTxt = ageMin == null ? 'no run recorded yet' : ageMin < 60 ? `${ageMin} min ago` : `${(ageMin/60).toFixed(1)} hr ago`;
+  fresh.textContent = `Last cron run: ${ageTxt}`;
+
+  // --- Decide each check's level ---
+  const checks = [];
+  // 1. Cron alive (Vercel fires every 2hr → stale if >3hr)
+  if (ageMin == null) checks.push({ lvl:'warn', label:'Automation', val:'Awaiting first run', note:'Cron writes status here every 2 hr' });
+  else if (ageMin > 180) checks.push({ lvl:'err', label:'Automation', val:'STALLED', note:`No cron run in ${ageTxt}` });
+  else checks.push({ lvl:'ok', label:'Automation', val:'Running', note:'Vercel cron every 2 hr' });
+  // 2. Backlog — students due a touch right now
+  if (dueBacklog === 0) checks.push({ lvl:'ok', label:'Cadence backlog', val:'Clear', note:'Everyone in-window is up to date' });
+  else if (ageMin != null && ageMin <= 180) checks.push({ lvl:'warn', label:'Cadence backlog', val:`${dueBacklog} due`, note:'Will send on next tick' });
+  else checks.push({ lvl:'err', label:'Cadence backlog', val:`${dueBacklog} stuck`, note:'Due but cron not firing' });
+  // 3. Reachability — active students missing contact info
+  if (missingEmail === 0) checks.push({ lvl:'ok', label:'Email reachable', val:'All have email', note:`${active.length} in 90-day window` });
+  else checks.push({ lvl:'warn', label:'Email reachable', val:`${missingEmail} missing email`, note:'Won’t get cadence email' });
+  // 4. Send failures from last run
+  const fails = wd ? ((wd.fails?.renewalEmail||0) + (wd.fails?.renewalSms||0)) : 0;
+  if (!wd) checks.push({ lvl:'warn', label:'Last-run sends', val:'Unknown', note:'No run recorded yet' });
+  else if (fails === 0) checks.push({ lvl:'ok', label:'Last-run sends', val:'No failures', note:`${(wd.sent?.renewalEmail||0)} emails · ${(wd.sent?.renewalSms||0)} texts` });
+  else checks.push({ lvl:'err', label:'Last-run sends', val:`${fails} failed`, note:'See errors below' });
+  // 5. Missed touches (slipped past without earlier touches)
+  if (missed === 0) checks.push({ lvl:'ok', label:'Missed touches', val:'None', note:'No one slipped through' });
+  else checks.push({ lvl:'warn', label:'Missed touches', val:`${missed} near expiry`, note:'Imported late / fix manually' });
+
+  checksEl.innerHTML = checks.map(c => wdCard(c.lvl, c.label, c.val, c.note)).join('');
+
+  // --- Errors list from last cron run ---
+  const errs = (wd && Array.isArray(wd.errors)) ? wd.errors : [];
+  errEl.innerHTML = errs.length
+    ? `<div style="font-size:11px;font-weight:700;color:#991B1B;margin-bottom:4px;">⚠ ${errs.length} error(s) from last run:</div>
+       <div style="font-size:11px;color:#991B1B;font-family:monospace;background:#FEF2F2;border-radius:6px;padding:8px;max-height:120px;overflow:auto;">${errs.map(escapeHtml).join('<br>')}</div>`
+    : '';
+
+  // --- Overall banner color = worst check ---
+  const worst = checks.some(c => c.lvl==='err') ? 'err' : (checks.some(c => c.lvl==='warn') ? 'warn' : 'ok');
+  const L = WD_LEVELS[worst];
+  box.style.background = L.bg; box.style.borderColor = L.border; box.style.color = L.color;
+  dot.style.background = L.dot;
+  title.innerHTML = worst==='ok' ? '🛡 Renewal Watchdog — all systems healthy'
+    : worst==='warn' ? '🛡 Renewal Watchdog — needs attention'
+    : '🛡 Renewal Watchdog — action required';
 }
 
 function renderRenewalsPage() {
-  updateRenewalCronBanner();
   // Dedupe by email — keep each student's most recent confirmed class as their "renewal anchor"
   const latestByEmail = new Map();
   RECORDS.forEach(r => {
@@ -3389,6 +3461,7 @@ function renderRenewalsPage() {
   // Add daysOverdue field for kanban cards
   rows.forEach(r => { r.daysOverdue = -r.daysUntil; });
 
+  updateRenewalWatchdog(rows);
   document.getElementById('renewalsTabCount').textContent = rows.length;
   // Pipeline view: show only past-due (overdue) records in the kanban
   if (getRenewalsView() === 'kanban') {
