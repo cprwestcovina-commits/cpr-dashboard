@@ -159,9 +159,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // Day 5 email
+    // Day 5 email — fire webhook + PATCH flag directly (don't rely on Make scenario to flag)
     if (age >= 120 && age <= 720 && d.comeback30_sent !== 'yes') {
       if (await fireWebhook(D5_EMAIL_HOOK, payload)) {
+        await patchFlag(lead.key, d, { comeback30_sent: 'yes', lead_stage: 'email2' });
         summary.d5email++;
       }
     }
