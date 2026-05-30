@@ -26,7 +26,7 @@ async function genOne(angle, dateLabel, appWeek) {
   const connectLine = appWeek
     ? "Stay Connected section: ONE short, brief sentence — mention following our socials AND downloading our free study-guide app."
     : "Stay Connected section: ONE short, brief sentence — invite them to follow our socials (Instagram, Facebook, YouTube). Keep it light.";
-  const prompt = `${BRAND}\n\nToday is ${dateLabel}.\nWrite ONE short newsletter email with EXACTLY these three sections, in this order. Use these exact header lines (with the emoji), each on its own line, followed by the section text:\n\n💡 Fun Fact\n(1-2 sentences: a genuinely interesting CPR/first-aid/AED fun fact)\n\n📅 What's Happening\n(1-2 sentences. ${angle.brief})\n\n📲 Stay Connected\n(${connectLine})\n\nKeep the whole thing brief and skimmable. Do NOT add other sections, links, or an unsubscribe line.\nReturn ONLY this JSON (no prose, no markdown):\n{"angle":"${angle.key}","subject":"...","headline":"...","body":"💡 Fun Fact\\n...\\n\\n📅 What's Happening\\n...\\n\\n📲 Stay Connected\\n..."}`;
+  const prompt = `${BRAND}\n\nToday is ${dateLabel}.\nWrite ONE short, skimmable newsletter email with EXACTLY these three sections, in order, using these exact header lines (with the emoji), each on its own line followed by 1-2 sentences:\n\n💡 Fun Fact\n(a genuinely interesting CPR/first-aid/AED fun fact)\n\n📅 What's Happening\n(${angle.brief})\n\n📲 Stay Connected\n(${connectLine})\n\nDo NOT add other sections, links, or an unsubscribe line.\n\nReturn your answer in EXACTLY this plain-text format (no markdown, no JSON):\nSUBJECT: <one catchy line>\nHEADLINE: <one line>\nBODY:\n💡 Fun Fact\n<text>\n\n📅 What's Happening\n<text>\n\n📲 Stay Connected\n<text>`;
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -34,11 +34,16 @@ async function genOne(angle, dateLabel, appWeek) {
   });
   if (!resp.ok) throw new Error('Anthropic ' + resp.status + ': ' + (await resp.text()).slice(0, 200));
   const data = await resp.json();
-  let text = (data.content?.[0]?.text || '').trim();
-  const s = text.indexOf('{'), e = text.lastIndexOf('}');
-  if (s >= 0 && e > s) text = text.slice(s, e + 1);
-  const t = JSON.parse(text);
-  return { angle: angle.key, subject: t.subject || '', headline: t.headline || '', body: t.body || '' };
+  const text = (data.content?.[0]?.text || '').trim();
+  const subjM = text.match(/SUBJECT:\s*(.+)/i);
+  const headM = text.match(/HEADLINE:\s*(.+)/i);
+  const bodyM = text.match(/BODY:\s*([\s\S]*)$/i);
+  return {
+    angle: angle.key,
+    subject: (subjM ? subjM[1] : '').trim(),
+    headline: (headM ? headM[1] : '').trim(),
+    body: (bodyM ? bodyM[1] : text).trim(),
+  };
 }
 
 async function readStored() {
