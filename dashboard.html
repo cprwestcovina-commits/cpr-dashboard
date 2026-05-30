@@ -1612,9 +1612,15 @@
     <!-- RENEWALS TAB -->
     <div class="page" id="page-renewals">
       <div class="card">
-        <h2>Renewal Pipeline <span class="count" id="renewalsTabCount">0</span></h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+          <h2 style="margin:0;">Renewal Pipeline <span class="count" id="renewalsTabCount">0</span></h2>
+          <div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:8px;">
+            <button id="renewalsViewKanban" onclick="setRenewalsView('kanban')" style="border:none;background:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,0.08);">🎯 Pipeline</button>
+            <button id="renewalsViewTable" onclick="setRenewalsView('table')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">📋 Table</button>
+          </div>
+        </div>
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:16px;">
-          Past BLS students approaching their 2-year recertification window. Automated reminders fire at 90/60/30/15/7/3/1 days before expiry.
+          Past students past their 2-year cert window. Drag through the funnel as you reach out, or let automation handle email outreach (100/day cap).
         </p>
         <div id="renewalsList"></div>
       </div>
@@ -3164,6 +3170,118 @@ function renderWebhooks(hooks) {
 }
 
 // === RENEWALS ===
+// === RENEWAL PIPELINE KANBAN ===
+const RENEWAL_STAGES = [
+  { key: 'new',     label: '🆕 New',        hint: 'Imported, never contacted' },
+  { key: 'emailed', label: '📧 Emailed',    hint: 'Got past-due renewal email' },
+  { key: 'texted',  label: '💬 Texted',     hint: 'SMS follow-up sent' },
+  { key: 'called',  label: '📞 Called',     hint: 'Owner phoned them' },
+  { key: 'booked',  label: '🏆 Renewed',    hint: 'They came back and booked' },
+  { key: 'lost',    label: '❌ Lost',       hint: 'No response after follow-ups' },
+];
+
+function getRenewalsView() {
+  return localStorage.getItem('renewalsView') || 'kanban';
+}
+function setRenewalsView(v) {
+  localStorage.setItem('renewalsView', v);
+  document.getElementById('renewalsViewKanban').style.background = v === 'kanban' ? '#fff' : 'transparent';
+  document.getElementById('renewalsViewKanban').style.boxShadow = v === 'kanban' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+  document.getElementById('renewalsViewTable').style.background = v === 'table' ? '#fff' : 'transparent';
+  document.getElementById('renewalsViewTable').style.boxShadow = v === 'table' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+  renderRenewalsPage();
+}
+
+// Resolve current renewal stage for a record
+function renewalStageOf(r) {
+  const explicit = (r.data.renewal_stage || '').toLowerCase();
+  if (explicit && RENEWAL_STAGES.find(s => s.key === explicit)) return explicit;
+  // Auto-derive from flags
+  if (r.data.past_due_email_sent === 'yes') return 'emailed';
+  return 'new';
+}
+
+async function setRenewalStage(key, stage) {
+  const r = RECORDS.find(x => x.key === key);
+  if (!r) return;
+  const body = { ...r.data, renewal_stage: stage };
+  try {
+    const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(key)}?teamId=${CONFIG.teamId}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('PATCH failed');
+    r.data.renewal_stage = stage;
+    renderRenewalsPage();
+  } catch (e) {
+    alert('Failed to update renewal stage: ' + e.message);
+  }
+}
+function advanceRenewal(key) {
+  const r = RECORDS.find(x => x.key === key); if (!r) return;
+  const i = RENEWAL_STAGES.findIndex(s => s.key === renewalStageOf(r));
+  if (i >= 0 && i < RENEWAL_STAGES.length - 2) setRenewalStage(key, RENEWAL_STAGES[i+1].key);
+}
+function retreatRenewal(key) {
+  const r = RECORDS.find(x => x.key === key); if (!r) return;
+  const i = RENEWAL_STAGES.findIndex(s => s.key === renewalStageOf(r));
+  if (i > 0) setRenewalStage(key, RENEWAL_STAGES[i-1].key);
+}
+function markRenewalBooked(key) { setRenewalStage(key, 'booked'); }
+function markRenewalLost(key)   { setRenewalStage(key, 'lost'); }
+
+function renewalCard(r) {
+  const stageIdx = RENEWAL_STAGES.findIndex(s => s.key === renewalStageOf(r));
+  const isTerminal = stageIdx >= RENEWAL_STAGES.length - 2;  // booked or lost
+  const courseLabel = courseLabelFull(r.data.course_type);
+  const overdueDays = r.daysOverdue || 0;
+  const overdueTxt = overdueDays > 365 ? `${Math.round(overdueDays/365*10)/10}yr overdue` : `${overdueDays}d overdue`;
+  return `<div class="kb-card" style="border-left:4px solid ${overdueDays > 365 ? '#C0392B' : '#E67E22'};">
+    <div style="font-weight:700;">${escapeHtml(r.data.first_name||'')} ${escapeHtml(r.data.last_name||'')}</div>
+    <div style="font-size:11px;color:var(--gray-700);margin:4px 0;">
+      <span style="background:#F3F4F6;padding:1px 6px;border-radius:3px;font-weight:600;">${courseLabel}</span>
+      <span style="color:${overdueDays > 365 ? 'var(--red)' : 'var(--orange)'};margin-left:6px;">${overdueTxt}</span>
+    </div>
+    <div style="font-size:11px;color:var(--gray-500);">Last class: ${escapeHtml(fmtDate(r.data.date))}</div>
+    <div style="margin-top:6px;font-size:12px;">
+      <a href="mailto:${escapeHtml(r.data.email)}" class="action-link">${escapeHtml(r.data.email)}</a><br>
+      ${r.data.phone ? `<a href="tel:${(r.data.phone||'').replace(/\D/g,'')}" class="action-link">${escapeHtml(r.data.phone)}</a>` : ''}
+    </div>
+    <div class="kb-actions" style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">
+      ${!isTerminal && stageIdx < RENEWAL_STAGES.length - 2 ? `<button class="kb-btn advance" onclick="advanceRenewal('${escapeHtml(r.key)}')">Next →</button>` : ''}
+      ${!isTerminal ? `<button class="kb-btn won" onclick="markRenewalBooked('${escapeHtml(r.key)}')" title="They renewed!">🏆 Booked</button>` : ''}
+      ${stageIdx > 0 ? `<button class="kb-btn back" onclick="retreatRenewal('${escapeHtml(r.key)}')">← Back</button>` : ''}
+      ${!isTerminal ? `<button class="kb-btn lost" onclick="markRenewalLost('${escapeHtml(r.key)}')">❌ Lost</button>` : `<button class="kb-btn" onclick="setRenewalStage('${escapeHtml(r.key)}', 'new')">↻ Reopen</button>`}
+      <button class="kb-btn" onclick="openEdit('${escapeHtml(r.key)}')">✏ Edit</button>
+    </div>
+  </div>`;
+}
+
+function renderRenewalsKanban(rows) {
+  const byStage = {};
+  RENEWAL_STAGES.forEach(s => byStage[s.key] = []);
+  rows.forEach(r => {
+    const s = renewalStageOf(r);
+    if (byStage[s]) byStage[s].push(r);
+  });
+  return `<div class="kanban-board">
+    ${RENEWAL_STAGES.map(s => `
+      <div class="kanban-col">
+        <div class="kanban-col-header">
+          <span>${s.label}</span>
+          <span class="count">${byStage[s.key].length}</span>
+        </div>
+        <div class="kanban-col-body">
+          ${byStage[s.key].length
+            ? byStage[s.key].slice(0, 50).map(renewalCard).join('') + (byStage[s.key].length > 50 ? `<div style="text-align:center;color:#888;font-size:11px;padding:8px;">+ ${byStage[s.key].length - 50} more</div>` : '')
+            : '<div class="kanban-empty">empty</div>'}
+        </div>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
 function renderRenewalsPage() {
   // Dedupe by email — keep each student's most recent confirmed class as their "renewal anchor"
   const latestByEmail = new Map();
@@ -3188,7 +3306,18 @@ function renderRenewalsPage() {
   });
   rows.sort((a,b) => a.daysUntil - b.daysUntil);
 
+  // Add daysOverdue field for kanban cards
+  rows.forEach(r => { r.daysOverdue = -r.daysUntil; });
+
   document.getElementById('renewalsTabCount').textContent = rows.length;
+  // Pipeline view: show only past-due (overdue) records in the kanban
+  if (getRenewalsView() === 'kanban') {
+    const overdue = rows.filter(r => r.daysUntil < 0);
+    document.getElementById('renewalsList').innerHTML = overdue.length
+      ? `<p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">${overdue.length} past-due renewals (already expired). Sort: oldest first. Drag through stages or use the buttons.</p>` + renderRenewalsKanban(overdue)
+      : '<div class="empty">No past-due renewals yet. Once historical students cross their 2-year mark, they show here.</div>';
+    return;
+  }
   document.getElementById('renewalsList').innerHTML = rows.length
     ? `<table><thead><tr><th>Student</th><th>Contact</th><th>Last Class</th><th>Renewal Due</th><th>Status</th></tr></thead><tbody>` +
       rows.map(r => {
