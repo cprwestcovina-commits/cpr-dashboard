@@ -467,7 +467,9 @@ export default async function handler(req, res) {
   if (selfHeal.renewalEmailScenario === 'healed') health.errors.unshift('AUTO-HEALED: renewal email scenario was stopped — restarted it');
   else if ((selfHeal.renewalEmailScenario || '').startsWith('failed')) health.errors.unshift(`SELF-HEAL FAILED: renewal email scenario (${selfHeal.renewalEmailScenario})`);
   let watchdogWritten = false;
-  try { watchdogWritten = await upsertRecord('__watchdog__', health); } catch (e) {}
+  // Store the whole health blob as a single JSON-string field — robust against datastore
+  // schema/type constraints on nested objects & arrays.
+  try { watchdogWritten = await upsertRecord('__watchdog__', { type: 'watchdog', ts: health.ts, json: JSON.stringify(health) }); } catch (e) {}
 
   return res.status(200).json({
     ok: true,

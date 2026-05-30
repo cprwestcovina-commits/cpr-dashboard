@@ -3442,7 +3442,8 @@ async function updateRenewalWatchdog(rows) {
   let wd = null, ageMin = null;
   try {
     const r = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent('__watchdog__')}?teamId=${CONFIG.teamId}`);
-    wd = (r && (r.record?.data || r.data)) || null;
+    const rec = (r && (r.record?.data || r.data)) || null;
+    wd = rec && rec.json ? JSON.parse(rec.json) : rec;
     if (wd && wd.ts) ageMin = Math.round((Date.now() - new Date(wd.ts).getTime()) / 60000);
   } catch (e) { /* record may not exist until first cron run */ }
 
@@ -3549,7 +3550,8 @@ async function updateLeadsWatchdog() {
   let wd = null, ageMin = null;
   try {
     const r = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent('__watchdog__')}?teamId=${CONFIG.teamId}`);
-    wd = (r && (r.record?.data || r.data)) || null;
+    const rec = (r && (r.record?.data || r.data)) || null;
+    wd = rec && rec.json ? JSON.parse(rec.json) : rec;
     if (wd && wd.ts) ageMin = Math.round((now - new Date(wd.ts).getTime()) / 60000);
   } catch (e) {}
   const ageTxt = ageMin == null ? 'no run recorded yet' : ageMin < 60 ? `${ageMin} min ago` : `${(ageMin/60).toFixed(1)} hr ago`;
