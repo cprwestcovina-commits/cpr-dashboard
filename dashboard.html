@@ -3443,7 +3443,7 @@ async function updateRenewalWatchdog(rows) {
   try {
     const r = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent('__watchdog__')}?teamId=${CONFIG.teamId}`);
     const rec = (r && (r.record?.data || r.data)) || null;
-    wd = rec && rec.json ? JSON.parse(rec.json) : rec;
+    wd = rec && rec.landing_url ? JSON.parse(rec.landing_url) : null;
     if (wd && wd.ts) ageMin = Math.round((Date.now() - new Date(wd.ts).getTime()) / 60000);
   } catch (e) { /* record may not exist until first cron run */ }
 
@@ -3551,7 +3551,7 @@ async function updateLeadsWatchdog() {
   try {
     const r = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent('__watchdog__')}?teamId=${CONFIG.teamId}`);
     const rec = (r && (r.record?.data || r.data)) || null;
-    wd = rec && rec.json ? JSON.parse(rec.json) : rec;
+    wd = rec && rec.landing_url ? JSON.parse(rec.landing_url) : null;
     if (wd && wd.ts) ageMin = Math.round((now - new Date(wd.ts).getTime()) / 60000);
   } catch (e) {}
   const ageTxt = ageMin == null ? 'no run recorded yet' : ageMin < 60 ? `${ageMin} min ago` : `${(ageMin/60).toFixed(1)} hr ago`;
