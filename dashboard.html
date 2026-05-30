@@ -1381,11 +1381,15 @@
       <div class="card" id="scenarioHealthCard" style="display:none;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px;">
           <h2 style="margin:0;">🔍 Scenario Health <span class="count" id="scenarioHealthBad" style="background:#9CA3AF;color:#fff;">0</span></h2>
-          <button class="btn btn-sm" onclick="checkScenarioHealth(true)">↻ Re-check</button>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm" onclick="triggerVercelCronNow()" style="background:#16A34A;color:#fff;border:0;">⚡ Run Cadence Now</button>
+            <button class="btn btn-sm" onclick="checkScenarioHealth(true)">↻ Re-check</button>
+          </div>
         </div>
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:12px;">
-          Last-fired timestamp per cadence scenario. Red = overdue. Yellow = approaching due. Green = ran on time.
+          🛡 = bulletproof (Vercel Cron every 2hr) · Last-fired per scenario. Red = overdue. Yellow = approaching due. Green = on time.
         </p>
+        <div id="cronSummary" style="background:#F0FDF4;border:1px solid #16A34A;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#15803D;display:none;"></div>
         <div id="scenarioHealthList"></div>
       </div>
 
@@ -4968,22 +4972,39 @@ window.addEventListener('load', () => {
   }
 });
 
+// Manual "fire the Vercel cron now" — useful for impatient verification
+async function triggerVercelCronNow() {
+  if (!confirm('Manually trigger the cadence cron now? Fires all 5 bulk webhooks immediately. Safe — only touches leads not yet touched (idempotent).')) return;
+  try {
+    const resp = await fetch('/api/cron/cadence');
+    const data = await resp.json();
+    alert(`✓ Cron fired. Results:\n${(data.results || []).map(r => `  ${r.name}: HTTP ${r.status || 'err'}`).join('\n')}\n\nLeads will be processed in ~10-30 sec. Hit ↻ Re-check after a minute.`);
+    // Force re-check
+    setTimeout(() => checkScenarioHealth(true), 8000);
+  } catch (e) {
+    alert('Failed to trigger cron: ' + e.message + '\n\nPossibly the Vercel deploy isn\'t done yet — try in 30 sec.');
+  }
+}
+
 // === SCENARIO HEALTH MONITOR ===
 // Cadence scenarios + their expected freshness window (minutes)
 const MONITORED_SCENARIOS = [
+  // === Vercel Cron–triggered bulk cadence (the bulletproof layer) ===
+  { id: 5235869, name: '🛡 Bulk T+2hr email',              maxAgeMin: 150, type: 'cron2h', vercelCron: true },
+  { id: 5235915, name: '🛡 Bulk T+24hr SMS',               maxAgeMin: 150, type: 'cron2h', vercelCron: true },
+  { id: 5235916, name: '🛡 Bulk Day 5 COMEBACK30 email',   maxAgeMin: 150, type: 'cron2h', vercelCron: true },
+  { id: 5235917, name: '🛡 Bulk Day 5 SMS',                maxAgeMin: 150, type: 'cron2h', vercelCron: true },
+  { id: 5235918, name: '🛡 Bulk Day 7 ACLS/PALS SMS',      maxAgeMin: 150, type: 'cron2h', vercelCron: true },
+  // === Event-driven (always reliable) ===
   { id: 5113311, name: 'Square webhook (Integration)',     maxAgeMin: 60*24,  type: 'event' },
   { id: 5124029, name: 'Pay-click T+0 email + alert',      maxAgeMin: 60*12,  type: 'event' },
   { id: 5126180, name: 'Renewal Pay-click',                maxAgeMin: 60*48,  type: 'event' },
-  { id: 5130806, name: 'Pay-click T+2hr follow-up',        maxAgeMin: 90,     type: 'hourly' },
-  { id: 5154192, name: 'Pay-click T+24hr SMS (Caroline)',  maxAgeMin: 90,     type: 'hourly' },
-  { id: 5154195, name: 'Day 5 SMS (COMEBACK30)',           maxAgeMin: 60*26,  type: 'daily' },
-  { id: 5154196, name: 'Day 7 ACLS/PALS SMS',              maxAgeMin: 60*26,  type: 'daily' },
-  { id: 5118321, name: 'Day 5 email (COMEBACK30)',         maxAgeMin: 60*26,  type: 'daily' },
+  // === Legacy scheduled (kept as fallback) ===
+  { id: 5130806, name: 'Pay-click T+2hr follow-up (sched)', maxAgeMin: 60*4,  type: 'hourly' },
+  { id: 5154192, name: 'Pay-click T+24hr SMS (sched)',      maxAgeMin: 60*4,  type: 'hourly' },
   { id: 5118287, name: '24hr Class Reminder',              maxAgeMin: 60*26,  type: 'daily' },
-  { id: 5118320, name: 'Roster: BLS Team',                 maxAgeMin: 60*26,  type: 'daily' },
   { id: 5154146, name: 'Roster: Instructor 7 AM PT',       maxAgeMin: 60*26,  type: 'daily' },
   { id: 5154145, name: 'Roster: Instructor 3 PM PT',       maxAgeMin: 60*26,  type: 'daily' },
-  { id: 5118321, name: 'Abandoned Day 5 push',             maxAgeMin: 60*26,  type: 'daily' },
   { id: 5126033, name: 'Daily Health Check',               maxAgeMin: 60*26,  type: 'daily' },
 ];
 
@@ -5055,6 +5076,23 @@ async function checkScenarioHealth(forceRefresh) {
     if (minsUntil < 1440) return `<span style="color:#444;">in ${Math.round(minsUntil/60*10)/10}hr</span>`;
     return `<span style="color:#444;">in ${Math.round(minsUntil/1440)}d</span>`;
   };
+
+  // Bulletproof cadence (Vercel Cron) summary at the top
+  const cronScenarios = results.filter(r => r.vercelCron);
+  if (cronScenarios.length) {
+    const summary = document.getElementById('cronSummary');
+    if (summary) {
+      const mostRecent = cronScenarios.reduce((acc, r) => (r.lastTs > (acc.lastTs || 0) ? r : acc), {});
+      const allGreen = cronScenarios.every(r => r.status === 'ok' || r.status === 'idle');
+      const lastFireMin = mostRecent.lastTs ? Math.round((Date.now() - mostRecent.lastTs)/60000) : null;
+      const lastFireTxt = lastFireMin == null ? 'never' : lastFireMin < 60 ? `${lastFireMin} min ago` : `${(lastFireMin/60).toFixed(1)} hr ago`;
+      summary.style.display = 'block';
+      summary.style.background = allGreen ? '#F0FDF4' : '#FEF3C7';
+      summary.style.borderColor = allGreen ? '#16A34A' : '#F59E0B';
+      summary.style.color = allGreen ? '#15803D' : '#92400E';
+      summary.innerHTML = `<strong>🛡 Bulletproof cadence:</strong> Vercel Cron pings every 2 hr. Most recent bulk fire: <strong>${lastFireTxt}</strong>. ${cronScenarios.filter(r => r.lastTs).length}/${cronScenarios.length} bulk scenarios have fired at least once. ${allGreen ? 'All healthy.' : '⚠ One or more bulk scenarios overdue.'}`;
+    }
+  }
 
   list.innerHTML = `<table style="width:100%;font-size:13px;"><thead><tr>
     <th></th><th>Scenario</th><th>Type</th><th>Last run</th><th>Next run</th><th>Status</th>
