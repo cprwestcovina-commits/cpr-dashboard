@@ -55,10 +55,12 @@ function renewalEmailFields(courseType, days, firstName) {
   const isPALS = c === 'pals';
   const courseShort = isHS ? 'Heartsaver' : isACLS ? 'ACLS' : isPALS ? 'PALS' : 'BLS';
   const courseName  = isHS ? 'Heartsaver First Aid CPR AED' : isACLS ? 'ACLS' : isPALS ? 'PALS' : 'BLS Provider';
-  const bookUrl = isHS ? 'https://cpr-dashboard-cprwc.vercel.app/heartsaver.html'
+  const bookBase = isHS ? 'https://cpr-dashboard-cprwc.vercel.app/heartsaver.html'
     : isACLS ? 'https://cpr-dashboard-cprwc.vercel.app/acls.html'
     : isPALS ? 'https://cpr-dashboard-cprwc.vercel.app/pals.html'
     : 'https://cprwestcovina-commits.github.io/bls-booking/bls-renewal.html';
+  // Tag the link so a booking from this email is attributable as a renewal conversion
+  const bookUrl = `${bookBase}?src=renewal&rc=t${days}`;
   const price = (isHS) ? '$98' : (isACLS || isPALS) ? '$250' : '$89';
   const fn = firstName || 'there';
   const headlineByDay = {

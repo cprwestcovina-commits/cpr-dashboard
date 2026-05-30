@@ -1623,6 +1623,9 @@
         <div id="wdErrors" style="margin-top:10px;"></div>
       </div>
 
+      <!-- Renewal wins scoreboard -->
+      <div id="renewalScoreboard" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px;"></div>
+
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
           <h2 style="margin:0;">Renewal Pipeline <span class="count" id="renewalsTabCount">0</span></h2>
@@ -3203,6 +3206,33 @@ function setRenewalsView(v) {
   renderRenewalsPage();
 }
 
+// === Renewal-win attribution ===
+// Map of email -> the record we actually CONTACTED in the renewal cadence (has a 'yes' touch flag).
+function buildRenewalContactedMap() {
+  const flags = RENEWAL_TOUCHES.map(t => t.flag);
+  const m = new Map();
+  RECORDS.forEach(r => {
+    const e = (r.data.email || '').toLowerCase();
+    if (!e) return;
+    if (flags.some(f => r.data[f] === 'yes') && !m.has(e)) m.set(e, r);
+  });
+  return m;
+}
+// A confirmed booking counts as a RENEWAL win if it was tagged src=renewal, OR it's a (newer)
+// booking by someone we contacted in the renewal cadence. Email-match works even if they book
+// by phone or via the homepage rather than the emailed link.
+function isRenewalWin(r, contacted) {
+  const d = r.data;
+  if (d.status !== 'confirmed' || !d.submitted_at) return false;
+  if ((d.booking_id || '').startsWith('manual-')) return false;
+  if ((d.src || '').toLowerCase() === 'renewal' || (d.source || '').toLowerCase() === 'renewal') return true;
+  const e = (d.email || '').toLowerCase();
+  if (!e) return false;
+  const t = contacted.get(e);
+  if (!t || t.key === r.key) return false;        // not contacted, or this IS the contacted record
+  return (d.date || '') >= (t.data.date || '');   // the win is the newer booking
+}
+
 // Resolve current renewal stage for a record
 function renewalStageOf(r) {
   const explicit = (r.data.renewal_stage || '').toLowerCase();
@@ -3443,7 +3473,38 @@ async function updateRenewalWatchdog(rows) {
     : '🛡 Renewal Watchdog — action required';
 }
 
+// Renewal wins scoreboard — re-activations driven by the renewal cadence (tracked separately from new-lead Wins)
+function updateRenewalScoreboard() {
+  const el = document.getElementById('renewalScoreboard');
+  if (!el) return;
+  const contacted = buildRenewalContactedMap();
+  const wins = RECORDS.filter(r => isRenewalWin(r, contacted));
+  const t = today();
+  const monthStart = t.slice(0,7) + '-01';
+  const lm = (() => { const d = new Date(); d.setMonth(d.getMonth()-1); return d; })();
+  const lmStart = lm.toISOString().slice(0,7) + '-01';
+  const lmEnd = lm.toISOString().slice(0,7) + '-31';
+  const thisMonth = wins.filter(r => (r.data.submitted_at||'').slice(0,10) >= monthStart);
+  const lastMonth = wins.filter(r => { const d=(r.data.submitted_at||'').slice(0,10); return d>=lmStart && d<=lmEnd; });
+  const rev = list => list.reduce((s,r)=>s+amountFor(r),0);
+  const contactedCount = contacted.size;
+  const rate = contactedCount ? Math.round(100 * wins.length / contactedCount) : 0;
+  const stats = [
+    { label: '🏆 Renewals Won (Month)', val: thisMonth.length, sub: '$'+rev(thisMonth).toLocaleString()+' revenue', cls:'green' },
+    { label: 'Renewals Won (Last Month)', val: lastMonth.length, sub: '$'+rev(lastMonth).toLocaleString()+' revenue' },
+    { label: 'Renewal Rate', val: rate+'%', sub: wins.length+' of '+contactedCount+' contacted', cls:'blue' },
+    { label: 'All-Time Renewal Revenue', val: '$'+rev(wins).toLocaleString(), sub: wins.length+' renewals won' },
+  ];
+  el.innerHTML = stats.map(s => `
+    <div class="stat ${s.cls||''}" style="padding:14px;">
+      <div class="label">${s.label}</div>
+      <div class="val" style="font-size:22px;">${s.val}</div>
+      <div class="sub">${s.sub}</div>
+    </div>`).join('');
+}
+
 function renderRenewalsPage() {
+  updateRenewalScoreboard();
   // Dedupe by email — keep each student's most recent confirmed class as their "renewal anchor"
   const latestByEmail = new Map();
   RECORDS.forEach(r => {
@@ -4162,11 +4223,14 @@ function renderLeadsWon() {
   // A "win" is a confirmed record that originally came through the pay-click flow
   // (i.e., it has a submitted_at AND a square_payment_id, OR booking_id not starting with manual-).
   // Manual adds are excluded from wins since they were never leads.
+  // Renewal conversions are excluded too — they're tracked separately in the Renewals tab.
+  const contacted = buildRenewalContactedMap();
   const wins = RECORDS.filter(r => {
     const d = r.data;
     if (d.status !== 'confirmed') return false;
     if (!d.submitted_at) return false;
     if ((d.booking_id || '').startsWith('manual-')) return false;  // manual adds aren't "wins"
+    if (isRenewalWin(r, contacted)) return false;  // renewal re-activations live in the Renewals scoreboard
     if (!leadsSourceMatch(r)) return false;  // respect Leads tab source filter
     return true;
   });
