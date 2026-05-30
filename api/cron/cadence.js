@@ -21,7 +21,7 @@ const TEAM_ID = '2313459';
 const T2HR_HOOK = 'https://hook.us2.make.com/qnq2sx9vj7t6csh97lsdovav9j98jz7a';
 const D5_EMAIL_HOOK = 'https://hook.us2.make.com/oxlc4vhndmrcj8x95cdoxje83akkhoih';
 const RENEWAL_HOOK = 'https://hook.us2.make.com/zshj7d7mbz2y5glqxo3mka3w2q9irlms';
-const RENEWAL_DAILY_CAP = 100;  // max past-due renewal emails per day
+const RENEWAL_DAILY_CAP = 0;    // PAUSED — set to 100 once email is approved
 
 function ageHours(submittedAt) {
   if (!submittedAt) return -1;
