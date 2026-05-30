@@ -12,7 +12,10 @@
 // Idempotent: each lead's nudge flag prevents re-sending.
 
 const MAKE_TOKEN = '4317021d-3786-4640-8265-34e63c0aaa2e';
-const GHL_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJsb2NhdGlvbl9pZCI6Ijc1Y3F4YzFZQVc3M2diY3Vmams4IiwidmVyc2lvbiI6MSwiaWF0IjoxNzMzMjc5MTczMzU0LCJzdWIiOiJnTmZxeTNoV2FlWnVDWTVVbXZzaiJ9.ymT5sb1pztdKbR1idokD6BkE4TDC_-9071XkDGiCELQ';
+// GHL v2 Private Integration Token (created 2026-05-30) — v1 SMS endpoint was deprecated
+const GHL_PIT = process.env.GHL_PIT || 'pit-8be319e0-c309-420e-a75c-c9b6d701d994';
+const GHL_LOCATION = '75cqxc1YAW73gbcufjk8';
+const GHL_API = 'https://services.leadconnectorhq.com';
 const DS_URL = 'https://us2.make.com/api/v2/data-stores/100809/data';
 const TEAM_ID = '2313459';
 const T2HR_HOOK = 'https://hook.us2.make.com/qnq2sx9vj7t6csh97lsdovav9j98jz7a';
@@ -41,25 +44,37 @@ function normPhone(p) {
 async function ghlUpsertContact(lead) {
   const phone = normPhone(lead.phone);
   if (!phone) return null;
-  const resp = await fetch('https://rest.gohighlevel.com/v1/contacts/', {
+  const resp = await fetch(`${GHL_API}/contacts/upsert`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${GHL_KEY}`, 'Content-Type': 'application/json' },
+    headers: {
+      'Authorization': `Bearer ${GHL_PIT}`,
+      'Version': '2021-07-28',
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({
-      phone, firstName: lead.first_name || '', lastName: lead.last_name || '',
-      email: lead.email || '', tags: ['cpr-pending', lead.course_type || 'bls'],
+      locationId: GHL_LOCATION,
+      phone,
+      firstName: lead.first_name || '',
+      lastName: lead.last_name || '',
+      email: lead.email || '',
+      tags: ['cpr-pending', lead.course_type || 'bls'],
       source: 'CPR West Covina booking widget',
     }),
   });
   if (!resp.ok) return null;
   const data = await resp.json();
-  return data.contact?.id || null;
+  return data.contact?.id || data.id || null;
 }
 
 async function ghlSendSMS(contactId, message) {
   if (!contactId) return { ok: false, err: 'no contactId' };
-  const resp = await fetch('https://rest.gohighlevel.com/v1/conversations/messages', {
+  const resp = await fetch(`${GHL_API}/conversations/messages`, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${GHL_KEY}`, 'Content-Type': 'application/json' },
+    headers: {
+      'Authorization': `Bearer ${GHL_PIT}`,
+      'Version': '2021-04-15',
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ type: 'SMS', contactId, message }),
   });
   return { ok: resp.ok, status: resp.status };
