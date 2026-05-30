@@ -1625,7 +1625,7 @@
           </div>
         </div>
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:16px;">
-          Past students past their 2-year cert window. Drag through the funnel as you reach out, or let automation handle email outreach (100/day cap).
+          Students approaching their 2-year cert renewal (within 90 days). The automated cadence emails + texts them at 90/60/30/15/7/0 days before expiration — each card shows exactly which touches have fired and what's next. Drag cards as you work them manually.
         </p>
         <div id="renewalsList"></div>
       </div>
@@ -3239,18 +3239,63 @@ function retreatRenewal(key) {
 function markRenewalBooked(key) { setRenewalStage(key, 'booked'); }
 function markRenewalLost(key)   { setRenewalStage(key, 'lost'); }
 
+// The 6 automated cadence touches (days before expiration)
+const RENEWAL_TOUCHES = [
+  { days: 90, flag: 'renewal_t90_sent' },
+  { days: 60, flag: 'renewal_t60_sent' },
+  { days: 30, flag: 'renewal_t30_sent' },
+  { days: 15, flag: 'renewal_t15_sent' },
+  { days: 7,  flag: 'renewal_t7_sent'  },
+  { days: 0,  flag: 'renewal_t0_sent'  },
+];
+
+// Build the cadence progress strip + a plain-English "next touch" summary
+function renewalCadenceStrip(r) {
+  const days = r.daysUntil;
+  let nextTouch = null;
+  const pills = RENEWAL_TOUCHES.map(t => {
+    const sent = r.data[t.flag] === 'yes';
+    const label = t.days === 0 ? 'Day' : t.days;
+    let bg, color, title;
+    if (sent) {
+      bg = '#DCFCE7'; color = '#15803D'; title = `${t.days}-day touch sent`;
+    } else if (days <= t.days + 1) {
+      // window reached but not yet sent → due now (first such = next)
+      if (!nextTouch) nextTouch = t;
+      bg = '#FEF3C7'; color = '#92400E'; title = `${t.days}-day touch due`;
+    } else {
+      bg = '#F3F4F6'; color = '#9CA3AF'; title = `${t.days}-day touch upcoming`;
+    }
+    return `<span title="${title}" style="background:${bg};color:${color};font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;min-width:20px;text-align:center;">${sent ? '✓' : ''}${label}</span>`;
+  }).join('');
+  // If no touch is "due", find the next upcoming one
+  if (!nextTouch) nextTouch = RENEWAL_TOUCHES.find(t => r.data[t.flag] !== 'yes' && days > t.days + 1) || null;
+  let nextTxt;
+  if (!nextTouch) {
+    nextTxt = '✓ All 6 touches sent';
+  } else if (days <= nextTouch.days + 1) {
+    nextTxt = `⏳ Next: ${nextTouch.days === 0 ? 'Day-of' : nextTouch.days + '-day'} email + text — <strong>due now</strong>`;
+  } else {
+    nextTxt = `Next: ${nextTouch.days === 0 ? 'Day-of' : nextTouch.days + '-day'} email + text in ~${days - nextTouch.days}d`;
+  }
+  return `<div style="display:flex;gap:3px;margin:6px 0 4px;">${pills}</div>
+    <div style="font-size:10px;color:var(--gray-600);">${nextTxt}</div>`;
+}
+
 function renewalCard(r) {
   const stageIdx = RENEWAL_STAGES.findIndex(s => s.key === renewalStageOf(r));
   const isTerminal = stageIdx >= RENEWAL_STAGES.length - 2;  // booked or lost
   const courseLabel = courseLabelFull(r.data.course_type);
-  const overdueDays = r.daysOverdue || 0;
-  const overdueTxt = overdueDays > 365 ? `${Math.round(overdueDays/365*10)/10}yr overdue` : `${overdueDays}d overdue`;
-  return `<div class="kb-card" style="border-left:4px solid ${overdueDays > 365 ? '#C0392B' : '#E67E22'};">
+  const days = r.daysUntil;
+  const dueTxt = days === 0 ? 'expires today' : (days < 0 ? `${-days}d overdue` : `renews in ${days}d`);
+  const dueColor = days <= 7 ? 'var(--red)' : (days <= 30 ? 'var(--orange)' : 'var(--gray-700)');
+  return `<div class="kb-card" style="border-left:4px solid ${days <= 7 ? '#C0392B' : (days <= 30 ? '#E67E22' : '#16A085')};">
     <div style="font-weight:700;">${escapeHtml(r.data.first_name||'')} ${escapeHtml(r.data.last_name||'')}</div>
     <div style="font-size:11px;color:var(--gray-700);margin:4px 0;">
       <span style="background:#F3F4F6;padding:1px 6px;border-radius:3px;font-weight:600;">${courseLabel}</span>
-      <span style="color:${overdueDays > 365 ? 'var(--red)' : 'var(--orange)'};margin-left:6px;">${overdueTxt}</span>
+      <span style="color:${dueColor};margin-left:6px;font-weight:600;">${dueTxt}</span>
     </div>
+    ${renewalCadenceStrip(r)}
     <div style="font-size:11px;color:var(--gray-500);">Last class: ${escapeHtml(fmtDate(r.data.date))}</div>
     <div style="margin-top:6px;font-size:12px;">
       <a href="mailto:${escapeHtml(r.data.email)}" class="action-link">${escapeHtml(r.data.email)}</a><br>
