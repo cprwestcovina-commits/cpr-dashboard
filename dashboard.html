@@ -5514,9 +5514,30 @@ function dismissUnmatched(paymentId) {
 }
 
 // Silent reconcile used by auto-confirm — does NOT re-check unmatched at the end (would recurse)
+// Payments we've already auto-confirmed — survives reloads so a payment can't be confirmed/emailed
+// twice across page loads or tabs (the cause of duplicate confirmation emails).
+function alreadyAutoConfirmed(paymentId) {
+  try { return (JSON.parse(localStorage.getItem('autoConfirmedPayments') || '[]')).includes(paymentId); } catch(e){ return false; }
+}
+function markAutoConfirmed(paymentId) {
+  try {
+    const a = JSON.parse(localStorage.getItem('autoConfirmedPayments') || '[]');
+    if (!a.includes(paymentId)) { a.push(paymentId); localStorage.setItem('autoConfirmedPayments', JSON.stringify(a.slice(-500))); }
+  } catch(e){}
+}
 async function reconcilePaymentSilent(recordKey, paymentId, sendEmail) {
   const r = RECORDS.find(x => x.key === recordKey);
   if (!r) throw new Error('Record not found');
+  // Idempotency: never auto-confirm/email the same payment twice (across reloads/tabs)
+  if (alreadyAutoConfirmed(paymentId)) return;
+  // Re-check current server state — if this record is already confirmed with a payment linked,
+  // another load/tab beat us to it; don't re-fire the confirmation email.
+  try {
+    const fresh = await apiGet(`/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(recordKey)}?teamId=${CONFIG.teamId}`);
+    const fd = (fresh && (fresh.record?.data || fresh.data)) || null;
+    if (fd && fd.status === 'confirmed' && fd.square_payment_id) { markAutoConfirmed(paymentId); r.data = fd; return; }
+  } catch (e) { /* if the lookup fails, fall through cautiously */ }
+  markAutoConfirmed(paymentId);  // claim it before sending so a racing run bails
   const newData = { ...r.data, status: 'confirmed', square_payment_id: paymentId };
   const res = await fetch(CONFIG.apiBase + `/data-stores/${CONFIG.dataStoreId}/data/${encodeURIComponent(recordKey)}?teamId=${CONFIG.teamId}`, {
     method: 'PATCH',
