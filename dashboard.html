@@ -3325,9 +3325,11 @@ function renderRenewalsKanban(rows) {
           <span>${s.label}</span>
           <span class="kb-col-count">${byStage[s.key].length}</span>
         </div>
-        ${byStage[s.key].length
-          ? byStage[s.key].slice(0, 50).map(renewalCard).join('') + (byStage[s.key].length > 50 ? `<div style="text-align:center;color:#888;font-size:11px;padding:8px;">+ ${byStage[s.key].length - 50} more</div>` : '')
-          : '<div style="font-size:11px;color:var(--gray-500);text-align:center;padding:20px 0;">empty</div>'}
+        <div style="display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow-y:auto;padding-right:2px;">
+          ${byStage[s.key].length
+            ? byStage[s.key].map(renewalCard).join('')
+            : '<div style="font-size:11px;color:var(--gray-500);text-align:center;padding:20px 0;">empty</div>'}
+        </div>
       </div>
     `).join('')}
   </div>`;
