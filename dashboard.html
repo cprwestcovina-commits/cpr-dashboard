@@ -4981,13 +4981,14 @@ async function triggerVercelCronNow() {
     const t = data.touched || {};
     const errCount = (t.errors || []).length;
     const lines = [
-      `✓ Cron fired (${data.totalPending || 0} pending leads scanned)`,
+      `✓ Cron fired (${data.totalRecords || 0} records · ${data.totalPending || 0} pending · ${data.renewalEligible || 0} renewal-eligible)`,
       ``,
       `📧 T+2hr email:      ${t.t2hr || 0} sent`,
       `💬 T+24hr SMS:       ${t.t24hr || 0} sent`,
       `📧 Day 5 email:      ${t.d5email || 0} sent`,
       `💬 Day 5 SMS:        ${t.d5sms || 0} sent`,
       `💬 Day 7 ACLS/PALS:  ${t.d7sms || 0} sent`,
+      `🔁 Renewal outreach: ${t.renewal || 0} sent (daily cap 100, only fires once/day)`,
       ``,
       errCount ? `⚠ ${errCount} errors: ${(t.errors || []).slice(0,3).join(', ')}` : `✓ No errors`,
     ];

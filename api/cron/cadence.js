@@ -20,6 +20,8 @@ const DS_URL = 'https://us2.make.com/api/v2/data-stores/100809/data';
 const TEAM_ID = '2313459';
 const T2HR_HOOK = 'https://hook.us2.make.com/qnq2sx9vj7t6csh97lsdovav9j98jz7a';
 const D5_EMAIL_HOOK = 'https://hook.us2.make.com/oxlc4vhndmrcj8x95cdoxje83akkhoih';
+const RENEWAL_HOOK = 'https://hook.us2.make.com/zshj7d7mbz2y5glqxo3mka3w2q9irlms';
+const RENEWAL_DAILY_CAP = 100;  // max past-due renewal emails per day
 
 function ageHours(submittedAt) {
   if (!submittedAt) return -1;
@@ -108,18 +110,28 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
 
-  let leads = [];
+  // Fetch ALL records (pending + confirmed) — pagination via offset
+  let all = [];
   try {
-    const resp = await fetch(`${DS_URL}?teamId=${TEAM_ID}&pg[limit]=100`, {
-      headers: { 'Authorization': `Token ${MAKE_TOKEN}` },
-    });
-    const data = await resp.json();
-    leads = (data.records || []).filter(r => r.data?.status === 'pending');
+    let offset = 0;
+    while (true) {
+      const resp = await fetch(`${DS_URL}?teamId=${TEAM_ID}&pg[limit]=100&pg[offset]=${offset}`, {
+        headers: { 'Authorization': `Token ${MAKE_TOKEN}` },
+      });
+      const data = await resp.json();
+      const batch = data.records || [];
+      all = all.concat(batch);
+      if (batch.length < 100) break;
+      offset += 100;
+      if (offset > 5000) break; // safety
+    }
   } catch (e) {
     return res.status(500).json({ ok: false, error: 'datastore fetch failed: ' + e.message });
   }
+  const leads = all.filter(r => r.data?.status === 'pending');
+  const confirmedHistorical = all.filter(r => r.data?.status === 'confirmed' && r.data?.source === 'historical_import' && r.data?.past_due_email_sent !== 'yes');
 
-  const summary = { t2hr: 0, t24hr: 0, d5email: 0, d5sms: 0, d7sms: 0, errors: [] };
+  const summary = { t2hr: 0, t24hr: 0, d5email: 0, d5sms: 0, d7sms: 0, renewal: 0, errors: [] };
 
   for (const lead of leads) {
     const d = lead.data;
@@ -195,10 +207,45 @@ export default async function handler(req, res) {
     }
   }
 
+  // === Past-due renewal outreach — runs once daily (9-10 AM PT window), capped at 100/day ===
+  // Cadence cron fires every 2hr (12x/day). Only do renewal outreach on the 16:00 UTC run
+  // (= 9 AM PT in summer, 8 AM in winter — close enough). That way: 100/day, not 1200/day.
+  const utcHour = new Date().getUTCHours();
+  const doRenewalToday = (utcHour === 16 || req.query?.force_renewal === '1');
+  const renewalEligible = confirmedHistorical
+    .filter(r => {
+      const cd = r.data.date;
+      if (!cd) return false;
+      const yearsAgo = (Date.now() - new Date(cd + 'T00:00:00').getTime()) / (365.25 * 86400000);
+      return yearsAgo >= 2;
+    })
+    .sort((a, b) => (a.data.date || '').localeCompare(b.data.date || ''));
+
+  const renewalBatch = doRenewalToday ? renewalEligible.slice(0, RENEWAL_DAILY_CAP) : [];
+  for (const lead of renewalBatch) {
+    const d = lead.data;
+    const lastClassDate = d.date_formatted || d.date || 'a few years ago';
+    const payload = {
+      first_name: d.first_name || 'there',
+      last_name: d.last_name || '',
+      email: d.email || '',
+      last_class_date: lastClassDate,
+    };
+    if (!payload.email) continue;
+    if (await fireWebhook(RENEWAL_HOOK, payload)) {
+      await patchFlag(lead.key, d, { past_due_email_sent: 'yes' });
+      summary.renewal++;
+    } else {
+      summary.errors.push(`renewal: ${payload.first_name}`);
+    }
+  }
+
   return res.status(200).json({
     ok: true,
     ts: new Date().toISOString(),
+    totalRecords: all.length,
     totalPending: leads.length,
+    renewalEligible: renewalEligible.length,
     touched: summary,
   });
 }
