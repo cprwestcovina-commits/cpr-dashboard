@@ -80,6 +80,10 @@ function renewalEmailFields(courseType, days, firstName) {
     book_url: bookUrl,
     cta_label: days === 0 ? `Renew Today — ${price}` : `Pick a Date — ${price}`,
     subject: days === 0 ? `${fn}, your ${courseShort} expires TODAY` : `${fn}, renew your ${courseShort} before it expires`,
+    // Inbox preview text (preheader) — renewal-focused, replaces the stray "today's the day ★★★★★" snippet
+    preheader: days === 0
+      ? `Renew your ${courseShort} today — quick class, same-day eCard. $30 off with code 30BEATS.`
+      : `Time to renew your ${courseShort} — pick a date that works, same-day eCard. $30 off with 30BEATS.`,
   };
 }
 
