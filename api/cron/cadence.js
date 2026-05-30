@@ -207,9 +207,17 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
 
-  // === Self-heal: ensure the renewal email scenario is running (restart it if it stopped/errored).
-  // Always-on, free, every 2hr — covers the exact failure mode where a Make scenario crashes off. ===
-  const selfHeal = { renewalEmailScenario: await ensureScenarioActive(5237696) };
+  // === Self-heal: ensure the customer-email scenarios are running (restart any that stopped/errored).
+  // Always-on, free, every 2hr — covers the failure mode where a Make scenario crashes off. ===
+  const SELF_HEAL_SCENARIOS = {
+    renewalEmail: 5237696,   // Renewal Cadence Email
+    t2hr: 5212589,           // On-Demand Catch-up (T+2hr recovery)
+    day5: 5235916,           // Bulk Day 5 COMEBACK30
+    confirmation: 5137480,   // Booking/Manual Confirmation
+  };
+  const selfHeal = {};
+  for (const [k, sid] of Object.entries(SELF_HEAL_SCENARIOS)) selfHeal[k] = await ensureScenarioActive(sid);
+  selfHeal.renewalEmailScenario = selfHeal.renewalEmail;  // backcompat for dashboard
 
   // Fetch ALL records (pending + confirmed) — pagination via offset
   let all = [];

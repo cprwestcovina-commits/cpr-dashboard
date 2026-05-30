@@ -3485,7 +3485,9 @@ async function updateRenewalWatchdog(rows) {
   // --- Decide each check's level ---
   const checks = [];
   // 1. Cron alive (Vercel fires every 2hr → stale if >3hr)
-  const heal = wd && wd.selfHeal ? wd.selfHeal.renewalEmailScenario : null;
+  const healVals = wd && wd.selfHeal ? Object.values(wd.selfHeal) : [];
+  const heal = healVals.some(v => v === 'healed') ? 'healed'
+    : healVals.some(v => typeof v === 'string' && v.startsWith('failed')) ? 'failed' : 'ok';
   if (ageMin == null) checks.push({ lvl:'warn', label:'Automation', val:'Awaiting first run', note:'Cron writes status here every 2 hr' });
   else if (ageMin > 180) checks.push({ lvl:'err', label:'Automation', val:'STALLED', note:`No cron run in ${ageTxt}` });
   else if (heal === 'healed') checks.push({ lvl:'warn', label:'Automation', val:'Auto-healed', note:'Email scenario had stopped — cron restarted it' });
@@ -3589,7 +3591,9 @@ async function updateLeadsWatchdog() {
 
   const checks = [];
   // 1. Cron alive + self-heal
-  const heal = wd && wd.selfHeal ? wd.selfHeal.renewalEmailScenario : null;
+  const healVals = wd && wd.selfHeal ? Object.values(wd.selfHeal) : [];
+  const heal = healVals.some(v => v === 'healed') ? 'healed'
+    : healVals.some(v => typeof v === 'string' && v.startsWith('failed')) ? 'failed' : 'ok';
   if (ageMin == null) checks.push({ lvl:'warn', label:'Automation', val:'Awaiting first run', note:'Cron writes status every 2 hr' });
   else if (ageMin > 180) checks.push({ lvl:'err', label:'Automation', val:'STALLED', note:`No cron run in ${ageTxt}` });
   else if (heal === 'healed') checks.push({ lvl:'warn', label:'Automation', val:'Auto-healed', note:'A scenario had stopped — restarted' });
