@@ -14,15 +14,19 @@ Socials: YouTube https://www.youtube.com/@cprwestcovina · Instagram https://www
 App (a free AHA study guide / pocketbook): "SOS First Aid · BLS ACLS PALS" https://apps.apple.com/us/app/sos-first-aid-bls-acls-pals/id6767118957
 Rules: Do NOT include an unsubscribe line or email footer (added automatically). Keep each body 2-4 short paragraphs. No fake statistics or medical claims. Output must be valid JSON only.`;
 
+// Every email follows the same 3-section structure; variations differ in the "What's Happening" focus.
 const ANGLES = [
-  { key: 'news',    brief: 'Promote upcoming class dates / availability (BLS, Heartsaver, ACLS, PALS). Friendly nudge to book or renew (mention code 30BEATS for renewals). Light community tone.' },
-  { key: 'tips',    brief: 'Lead with a genuinely useful CPR/first-aid safety tip (hands-only CPR, AED basics, choking, infant CPR — pick one). Tie in seasonally if it fits the date. Soft reminder we offer training.' },
-  { key: 'social',  brief: 'Invite them to follow our socials (YouTube, Instagram, Facebook) for tips and class updates. Make following feel worthwhile and community-driven.' },
-  { key: 'app',     brief: 'Promote our free study-guide app "SOS First Aid · BLS ACLS PALS" — a handy AHA pocketbook to review BLS/ACLS/PALS algorithms anytime. Encourage download from the App Store.' },
+  { key: 'seasonal', brief: "What's Happening section: tie to the current season/holiday and relevant safety (e.g. summer/pool, winter, back-to-school)." },
+  { key: 'classes',  brief: "What's Happening section: highlight upcoming class availability (BLS, Heartsaver, ACLS, PALS) and easy 2-year renewals with code 30BEATS." },
+  { key: 'community',brief: "What's Happening section: a local/community angle (jobs needing certification, family preparedness, a recent milestone or thank-you to students)." },
+  { key: 'app',      brief: "What's Happening section: spotlight our free study-guide app 'SOS First Aid · BLS ACLS PALS' — a handy AHA pocketbook to review algorithms anytime." },
 ];
 
-async function genOne(angle, dateLabel) {
-  const prompt = `${BRAND}\n\nToday is ${dateLabel}.\nWrite ONE email for this angle: ${angle.brief}\n\nReturn ONLY this JSON (no prose, no markdown):\n{"angle":"${angle.key}","subject":"...","headline":"...","body":"para1\\n\\npara2"}`;
+async function genOne(angle, dateLabel, appWeek) {
+  const connectLine = appWeek
+    ? "Stay Connected section: ONE short, brief sentence — mention following our socials AND downloading our free study-guide app."
+    : "Stay Connected section: ONE short, brief sentence — invite them to follow our socials (Instagram, Facebook, YouTube). Keep it light.";
+  const prompt = `${BRAND}\n\nToday is ${dateLabel}.\nWrite ONE short newsletter email with EXACTLY these three sections, in this order. Use these exact header lines (with the emoji), each on its own line, followed by the section text:\n\n💡 Fun Fact\n(1-2 sentences: a genuinely interesting CPR/first-aid/AED fun fact)\n\n📅 What's Happening\n(1-2 sentences. ${angle.brief})\n\n📲 Stay Connected\n(${connectLine})\n\nKeep the whole thing brief and skimmable. Do NOT add other sections, links, or an unsubscribe line.\nReturn ONLY this JSON (no prose, no markdown):\n{"angle":"${angle.key}","subject":"...","headline":"...","body":"💡 Fun Fact\\n...\\n\\n📅 What's Happening\\n...\\n\\n📲 Stay Connected\\n..."}`;
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
@@ -68,7 +72,7 @@ export default async function handler(req, res) {
       const i = parseInt(slot, 10);
       const existing = (await readStored()) || { templates: [] };
       const angle = set[i] || ANGLES[(i + 1) % ANGLES.length] || ANGLES[0];
-      const one = await genOne(angle, dateLabel);
+      const one = await genOne(angle, dateLabel, firstWeekOfMonth);
       existing.templates = existing.templates || [];
       existing.templates[i] = one;
       existing.generatedAt = now.toISOString();
@@ -76,7 +80,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ template: one, slot: i });
     }
     const templates = [];
-    for (const a of set) templates.push(await genOne(a, dateLabel));
+    for (const a of set) templates.push(await genOne(a, dateLabel, firstWeekOfMonth));
     const obj = { templates, generatedAt: now.toISOString() };
     await store(obj);
     return res.status(200).json(obj);

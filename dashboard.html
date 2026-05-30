@@ -1648,8 +1648,8 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
           <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">Instagram URL</label><input id="campIg" class="search-input" style="width:100%;" placeholder="https://instagram.com/..." /></div>
           <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">Facebook URL</label><input id="campFb" class="search-input" style="width:100%;" placeholder="https://facebook.com/..." /></div>
+          <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">YouTube URL</label><input id="campYt" class="search-input" style="width:100%;" placeholder="https://youtube.com/@..." /></div>
           <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">App Store URL</label><input id="campApp" class="search-input" style="width:100%;" placeholder="https://apps.apple.com/..." /></div>
-          <div><label style="font-size:12px;font-weight:700;color:var(--gray-700);">Google Play URL</label><input id="campPlay" class="search-input" style="width:100%;" placeholder="https://play.google.com/..." /></div>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
           <button class="btn" onclick="campaignPreview()">👁 Preview</button>
@@ -3642,30 +3642,53 @@ function campaignAudience() {
   return set;
 }
 
+// Your real socials/app — used as defaults so fields aren't blank
+const DEFAULT_SOCIALS = {
+  Ig: 'https://www.instagram.com/cprwestcovina/',
+  Fb: 'https://web.facebook.com/profile.php?id=61587989711336',
+  Yt: 'https://www.youtube.com/@cprwestcovina',
+  App: 'https://apps.apple.com/us/app/sos-first-aid-bls-acls-pals/id6767118957',
+};
+
+// Render a body that may contain section blocks. A block's first line is treated as a section
+// header if it's short and doesn't end in sentence punctuation (e.g. "💡 Fun Fact").
+function renderBodyHtml(body) {
+  return body.split(/\n{2,}/).map(block => {
+    const lines = block.split('\n');
+    const first = lines[0].trim();
+    const isHeader = first.length <= 42 && !/[.!?]$/.test(first) && lines.length > 1;
+    if (isHeader) {
+      const rest = lines.slice(1).join('\n');
+      return `<div style="font-size:13px;font-weight:800;color:#243B5A;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 6px;">${escapeHtml(first)}</div>
+        <p style="margin:0 0 8px;font-size:15px;line-height:1.6;color:#333;">${escapeHtml(rest).replace(/\n/g,'<br>')}</p>`;
+    }
+    return `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#333;">${escapeHtml(block).replace(/\n/g,'<br>')}</p>`;
+  }).join('');
+}
+
 // Assemble the branded HTML body from the compose fields
 function assembleCampaignHtml() {
   const headline = (document.getElementById('campHeadline').value || '').trim();
   const body = (document.getElementById('campBody').value || '').trim();
   const ig = document.getElementById('campIg').value.trim();
   const fb = document.getElementById('campFb').value.trim();
+  const yt = document.getElementById('campYt').value.trim();
   const app = document.getElementById('campApp').value.trim();
-  const play = document.getElementById('campPlay').value.trim();
-  const paras = body.split(/\n{2,}/).map(p => `<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#333;">${escapeHtml(p).replace(/\n/g,'<br>')}</p>`).join('');
   const social = [];
   if (ig)  social.push(`<a href="${escapeHtml(ig)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">Instagram</a>`);
   if (fb)  social.push(`<a href="${escapeHtml(fb)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">Facebook</a>`);
-  if (app) social.push(`<a href="${escapeHtml(app)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">App Store</a>`);
-  if (play)social.push(`<a href="${escapeHtml(play)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">Google Play</a>`);
+  if (yt)  social.push(`<a href="${escapeHtml(yt)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">YouTube</a>`);
+  if (app) social.push(`<a href="${escapeHtml(app)}" style="color:#243B5A;font-weight:700;text-decoration:none;margin:0 8px;">Our App</a>`);
   const socialRow = social.length ? `<div style="text-align:center;margin:24px 0 8px;padding-top:16px;border-top:1px solid #eee;"><div style="font-size:13px;color:#555;margin-bottom:8px;">Stay connected 👇</div>${social.join('')}</div>` : '';
   return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;max-width:560px;margin:0 auto;background:#fff;color:#1a1a1a;padding:28px 24px;">
     ${headline ? `<h1 style="margin:0 0 16px;font-size:24px;color:#243B5A;line-height:1.25;">${escapeHtml(headline)}</h1>` : ''}
-    ${paras}
+    ${renderBodyHtml(body)}
     ${socialRow}
   </div>`;
 }
 
 function campaignSaveSocials() {
-  ['Ig','Fb','App','Play'].forEach(k => localStorage.setItem('camp'+k, document.getElementById('camp'+k).value));
+  ['Ig','Fb','Yt','App'].forEach(k => localStorage.setItem('camp'+k, document.getElementById('camp'+k).value));
 }
 function campaignPreview() {
   document.getElementById('campPreview').innerHTML = `<div style="border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;"><div style="background:var(--gray-100);padding:8px 12px;font-size:12px;color:var(--gray-700);"><strong>Subject:</strong> ${escapeHtml(document.getElementById('campSubject').value||'(none)')}</div>${assembleCampaignHtml()}<div style="padding:10px 24px;font-size:11px;color:#999;text-align:center;border-top:1px solid #eee;">…footer + Unsubscribe link auto-appended per recipient</div></div>`;
@@ -3772,8 +3795,8 @@ async function generateTemplatesNow() {
 
 function renderCampaigns() {
   renderWeeklyIdeas();
-  // prefill saved socials
-  ['Ig','Fb','App','Play'].forEach(k => { const el=document.getElementById('camp'+k); if (el && !el.value) el.value = localStorage.getItem('camp'+k) || ''; });
+  // prefill socials: saved value if any, else your real defaults
+  ['Ig','Fb','Yt','App'].forEach(k => { const el=document.getElementById('camp'+k); if (el && !el.value) el.value = localStorage.getItem('camp'+k) || DEFAULT_SOCIALS[k] || ''; });
   const audience = campaignAudience().size;
   document.getElementById('campAudience').textContent = `Audience: ${audience} students`;
   // Active campaign status (read the __campaign__ record from the full fetch)
