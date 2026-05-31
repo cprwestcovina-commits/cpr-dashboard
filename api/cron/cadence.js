@@ -315,16 +315,18 @@ export default async function handler(req, res) {
   }
 
   // === Past-due renewal outreach — runs once daily (9-10 AM PT window), capped at 100/day ===
-  // Renewal/broadcast outreach runs ONCE PER DAY — on the FIRST cron run of each UTC day.
-  // (Gating to a fixed hour broke when the scheduled cron doesn't run at that hour.)
-  // We detect "first run today" by comparing the previous watchdog record's date to today.
+  // Renewal/broadcast outreach runs ONCE PER DAY at ~9 AM PT. With the GitHub-Actions pinger
+  // hitting this endpoint every 2 hr, we fire on the FIRST run at/after 16:00 UTC (≈9 AM PT)
+  // that hasn't already sent today — tracked via a dedicated `renewalDate` marker (not the
+  // watchdog ts, which updates every run).
   const todayUTC = new Date().toISOString().slice(0, 10);
-  let lastRunDate = null;
+  const utcHour = new Date().getUTCHours();
+  let lastRenewalDate = null;
   try {
     const wdPrev = all.find(r => r.key === '__watchdog__' || r.data?.status === 'watchdog');
-    if (wdPrev?.data?.landing_url) lastRunDate = (JSON.parse(wdPrev.data.landing_url).ts || '').slice(0, 10);
+    if (wdPrev?.data?.landing_url) lastRenewalDate = JSON.parse(wdPrev.data.landing_url).renewalDate || null;
   } catch (e) {}
-  const doRenewalToday = (lastRunDate !== todayUTC) || req.query?.force_renewal === '1';
+  const doRenewalToday = (utcHour >= 16 && lastRenewalDate !== todayUTC) || req.query?.force_renewal === '1';
   const renewalEligible = confirmedHistorical
     .filter(r => {
       const cd = r.data.date;
@@ -493,6 +495,7 @@ export default async function handler(req, res) {
   const health = {
     type: 'watchdog',
     ts: new Date().toISOString(),
+    renewalDate: doRenewalToday ? todayUTC : lastRenewalDate,  // marks the day renewals last fired
     totalRecords: all.length,
     confirmedAnchors: confirmedAll.length,
     activeWindow,
