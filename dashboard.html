@@ -1867,6 +1867,9 @@ var MAKE_TOKEN = null;
 var DASHBOARD_PW = null;
 var RECORDS = [];
 var WATCHDOG_REC = null;  // synthetic __watchdog__ record (health blob in landing_url), captured in loadAll
+// Cron freshness: alert only if the cron hasn't run in over a day (~26h). Works whether the cron
+// runs once daily (Vercel Hobby) or every 2 hr (external pinger) — both stay green in normal use.
+const CRON_STALE_MIN = 1560;
 var calendarMonth = new Date();
 var studentFilter = 'all';
 var sourceFilter = 'all';            // Calendar tab source filter
@@ -3596,14 +3599,14 @@ async function updateRenewalWatchdog(rows) {
   const healVals = wd && wd.selfHeal ? Object.values(wd.selfHeal) : [];
   const heal = healVals.some(v => v === 'healed') ? 'healed'
     : healVals.some(v => typeof v === 'string' && v.startsWith('failed')) ? 'failed' : 'ok';
-  if (ageMin == null) checks.push({ lvl:'warn', label:'Automation', val:'Awaiting first run', note:'Cron writes status here every 2 hr' });
-  else if (ageMin > 180) checks.push({ lvl:'err', label:'Automation', val:'STALLED', note:`No cron run in ${ageTxt}` });
+  if (ageMin == null) checks.push({ lvl:'warn', label:'Automation', val:'Awaiting first run', note:'Cron writes status each run' });
+  else if (ageMin > CRON_STALE_MIN) checks.push({ lvl:'err', label:'Automation', val:'STALLED', note:`No cron run in ${ageTxt}` });
   else if (heal === 'healed') checks.push({ lvl:'warn', label:'Automation', val:'Auto-healed', note:'Email scenario had stopped — cron restarted it' });
   else if (heal && heal.startsWith('failed')) checks.push({ lvl:'err', label:'Automation', val:'Heal failed', note:'Email scenario down, restart failed' });
-  else checks.push({ lvl:'ok', label:'Automation', val:'Running', note:'Vercel cron every 2 hr · self-healing on' });
+  else checks.push({ lvl:'ok', label:'Automation', val:'Running', note:'Cron + self-healing active' });
   // 2. Backlog — students due a touch right now
   if (dueBacklog === 0) checks.push({ lvl:'ok', label:'Cadence backlog', val:'Clear', note:'Everyone in-window is up to date' });
-  else if (ageMin != null && ageMin <= 180) checks.push({ lvl:'warn', label:'Cadence backlog', val:`${dueBacklog} due`, note:'Will send on next tick' });
+  else if (ageMin != null && ageMin <= CRON_STALE_MIN) checks.push({ lvl:'warn', label:'Cadence backlog', val:`${dueBacklog} due`, note:'Will send on next tick' });
   else checks.push({ lvl:'err', label:'Cadence backlog', val:`${dueBacklog} stuck`, note:'Due but cron not firing' });
   // 3. Reachability — active students missing contact info
   if (missingEmail === 0) checks.push({ lvl:'ok', label:'Email reachable', val:'All have email', note:`${active.length} in 90-day window` });
@@ -3866,7 +3869,7 @@ const AUTO_GROUPS = [
     { name: 'Monthly Broadcast', channel: 'system', trigger: 'your scheduled dates, sent via Brevo', note: 'Composed + scheduled in Campaigns → This Month’s Plan.' },
   ]},
   { title: '🛡 System / Self-healing', steps: [
-    { name: 'Cron Self-heal', channel: 'system', trigger: 'every 2 hr — restarts any stopped email scenario', note: 'Runs inside the Vercel cron. Keeps the renewal/recovery/confirmation senders alive automatically.' },
+    { name: 'Cron Self-heal', channel: 'system', trigger: 'each cron run — restarts any stopped email scenario', note: 'Runs inside the Vercel cron. Keeps the renewal/recovery/confirmation senders alive automatically.' },
     { name: 'Cadence Watchdog', channel: 'system', trigger: 'hourly health check', scenarioId: 5201183 },
     { name: 'Auto-healer', channel: 'system', trigger: 'every 30 min', scenarioId: 5201216 },
     { name: 'Daily Dedup', channel: 'system', trigger: 'daily — expires stale pending leads', scenarioId: 5201275 },
@@ -4086,17 +4089,17 @@ async function updateLeadsWatchdog() {
   const healVals = wd && wd.selfHeal ? Object.values(wd.selfHeal) : [];
   const heal = healVals.some(v => v === 'healed') ? 'healed'
     : healVals.some(v => typeof v === 'string' && v.startsWith('failed')) ? 'failed' : 'ok';
-  if (ageMin == null) checks.push({ lvl:'warn', label:'Automation', val:'Awaiting first run', note:'Cron writes status every 2 hr' });
-  else if (ageMin > 180) checks.push({ lvl:'err', label:'Automation', val:'STALLED', note:`No cron run in ${ageTxt}` });
+  if (ageMin == null) checks.push({ lvl:'warn', label:'Automation', val:'Awaiting first run', note:'Cron writes status each run' });
+  else if (ageMin > CRON_STALE_MIN) checks.push({ lvl:'err', label:'Automation', val:'STALLED', note:`No cron run in ${ageTxt}` });
   else if (heal === 'healed') checks.push({ lvl:'warn', label:'Automation', val:'Auto-healed', note:'A scenario had stopped — restarted' });
   else checks.push({ lvl:'ok', label:'Automation', val:'Running', note:'Every 2 hr · self-healing on' });
   // 2. T+2hr email follow-up
   if (due2hr === 0) checks.push({ lvl:'ok', label:'T+2hr email', val:'On track', note:'No leads overdue' });
-  else if (ageMin != null && ageMin <= 180) checks.push({ lvl:'warn', label:'T+2hr email', val:`${due2hr} due`, note:'Sends on next tick' });
+  else if (ageMin != null && ageMin <= CRON_STALE_MIN) checks.push({ lvl:'warn', label:'T+2hr email', val:`${due2hr} due`, note:'Sends on next tick' });
   else checks.push({ lvl:'err', label:'T+2hr email', val:`${due2hr} stuck`, note:'Overdue + cron not firing' });
   // 3. T+24hr SMS follow-up
   if (due24hr === 0) checks.push({ lvl:'ok', label:'T+24hr text', val:'On track', note:'No leads overdue' });
-  else if (ageMin != null && ageMin <= 180) checks.push({ lvl:'warn', label:'T+24hr text', val:`${due24hr} due`, note:'Sends on next tick' });
+  else if (ageMin != null && ageMin <= CRON_STALE_MIN) checks.push({ lvl:'warn', label:'T+24hr text', val:`${due24hr} due`, note:'Sends on next tick' });
   else checks.push({ lvl:'err', label:'T+24hr text', val:`${due24hr} stuck`, note:'Overdue + cron not firing' });
   // 4. Reachability
   if (missingContact === 0) checks.push({ lvl:'ok', label:'Reachable', val:'All have contact', note:`${pending.length} pending leads` });
@@ -6105,7 +6108,7 @@ async function checkScenarioHealth(forceRefresh) {
       summary.style.background = allGreen ? '#F0FDF4' : '#FEF3C7';
       summary.style.borderColor = allGreen ? '#16A34A' : '#F59E0B';
       summary.style.color = allGreen ? '#15803D' : '#92400E';
-      summary.innerHTML = `<strong>🛡 Bulletproof cadence:</strong> Vercel Cron pings every 2 hr. Most recent bulk fire: <strong>${lastFireTxt}</strong>. ${cronScenarios.filter(r => r.lastTs).length}/${cronScenarios.length} bulk scenarios have fired at least once. ${allGreen ? 'All healthy.' : '⚠ One or more bulk scenarios overdue.'}`;
+      summary.innerHTML = `<strong>🛡 Bulletproof cadence:</strong> Vercel Cron runs on schedule. Most recent bulk fire: <strong>${lastFireTxt}</strong>. ${cronScenarios.filter(r => r.lastTs).length}/${cronScenarios.length} bulk scenarios have fired at least once. ${allGreen ? 'All healthy.' : '⚠ One or more bulk scenarios overdue.'}`;
     }
   }
 
