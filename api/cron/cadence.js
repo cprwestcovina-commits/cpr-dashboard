@@ -315,10 +315,16 @@ export default async function handler(req, res) {
   }
 
   // === Past-due renewal outreach — runs once daily (9-10 AM PT window), capped at 100/day ===
-  // Cadence cron fires every 2hr (12x/day). Only do renewal outreach on the 16:00 UTC run
-  // (= 9 AM PT in summer, 8 AM in winter — close enough). That way: 100/day, not 1200/day.
-  const utcHour = new Date().getUTCHours();
-  const doRenewalToday = (utcHour === 16 || req.query?.force_renewal === '1');
+  // Renewal/broadcast outreach runs ONCE PER DAY — on the FIRST cron run of each UTC day.
+  // (Gating to a fixed hour broke when the scheduled cron doesn't run at that hour.)
+  // We detect "first run today" by comparing the previous watchdog record's date to today.
+  const todayUTC = new Date().toISOString().slice(0, 10);
+  let lastRunDate = null;
+  try {
+    const wdPrev = all.find(r => r.key === '__watchdog__' || r.data?.status === 'watchdog');
+    if (wdPrev?.data?.landing_url) lastRunDate = (JSON.parse(wdPrev.data.landing_url).ts || '').slice(0, 10);
+  } catch (e) {}
+  const doRenewalToday = (lastRunDate !== todayUTC) || req.query?.force_renewal === '1';
   const renewalEligible = confirmedHistorical
     .filter(r => {
       const cd = r.data.date;
