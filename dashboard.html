@@ -1351,7 +1351,7 @@
     <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</div>
     <div class="tab" data-tab="calendar" onclick="switchTab('calendar')">📅 Calendar</div>
     <div class="tab" data-tab="leads" onclick="switchTab('leads')">🟡 Leads <span class="badge" id="leadsBadge" style="display:none;">0</span></div>
-    <div class="tab" data-tab="revenue" onclick="switchTab('revenue')">💰 Revenue</div>
+    <div class="tab" data-tab="revenue" onclick="switchTab('revenue')">📊 Analytics</div>
     <div class="tab" data-tab="students" onclick="switchTab('students')">👥 Students</div>
     <div class="tab" data-tab="renewals" onclick="switchTab('renewals')">🔄 Renewals <span class="badge" id="renewalsBadge" style="display:none;">0</span></div>
     <div class="tab" data-tab="campaigns" onclick="switchTab('campaigns')">📣 Campaigns</div>
@@ -1974,7 +1974,8 @@ function switchTab(tab) {
   currentTab = tab;
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + tab));
-  document.getElementById('pageTitle').textContent = tab.charAt(0).toUpperCase() + tab.slice(1);
+  const TAB_TITLES = { revenue: 'Analytics' };
+  document.getElementById('pageTitle').textContent = TAB_TITLES[tab] || (tab.charAt(0).toUpperCase() + tab.slice(1));
   location.hash = tab;
   // Re-render the active page in case data changed
   render();
