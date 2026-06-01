@@ -916,8 +916,8 @@ buildDates();
   }
   window.addEventListener('load', postHeight);
   window.addEventListener('resize', postHeight);
+  // ResizeObserver fires only on real content-height changes (step transitions) — precise, no jitter.
   if (window.ResizeObserver) { try { new ResizeObserver(postHeight).observe(document.body); } catch (e) {} }
-  setInterval(postHeight, 600); // safety net for step changes / dynamic content
 })();
 </script>
 </body>
