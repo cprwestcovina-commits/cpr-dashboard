@@ -905,19 +905,19 @@ function copyPromo(btn) {
 buildDates();
 </script>
 <script>
-/* Embed support: strip chrome in ?embed=1 and report true content height to the parent
-   page so the iframe can auto-size (no white space). Harmless when used standalone. */
+/* Auto-height for iframe embeds — IDENTICAL protocol to the other CPR West Covina widgets
+   (measures the .widget element exactly + posts 'bls-widget-resize'), so any landing page that
+   already embeds those widgets sizes this one the same way. */
 (function () {
-  try {
-    if (new URLSearchParams(location.search).get('embed') === '1') document.body.classList.add('embed');
-  } catch (e) {}
-  function postHeight() {
-    try { parent.postMessage({ type: 'cprwc-embed-h', height: document.documentElement.scrollHeight }, '*'); } catch (e) {}
+  try { if (new URLSearchParams(location.search).get('embed') === '1') document.body.classList.add('embed'); } catch (e) {}
+  function postHeightToParent() {
+    if (window.parent === window) return;
+    var el = document.querySelector('.widget');
+    if (!el) return;
+    window.parent.postMessage({ type: 'bls-widget-resize', height: Math.ceil(el.getBoundingClientRect().height) }, '*');
   }
-  window.addEventListener('load', postHeight);
-  window.addEventListener('resize', postHeight);
-  // ResizeObserver fires only on real content-height changes (step transitions) — precise, no jitter.
-  if (window.ResizeObserver) { try { new ResizeObserver(postHeight).observe(document.body); } catch (e) {} }
+  if (window.ResizeObserver) { try { new ResizeObserver(postHeightToParent).observe(document.querySelector('.widget')); } catch (e) {} }
+  window.addEventListener('load', postHeightToParent);
 })();
 </script>
 </body>
