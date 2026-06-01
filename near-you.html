@@ -55,10 +55,9 @@
     overflow: hidden;
     box-shadow: 0 4px 40px rgba(0,0,0,0.08);
   }
-  /* Embed mode (?embed=1): hide the header/reviews the landing page already shows, drop the shadow */
+  /* Embed mode (?embed=1): seamless inside a landing page — keep the full widget, just drop the outer shadow */
   body.embed { background: transparent; }
-  body.embed .widget { box-shadow: none; border-radius: 0; max-width: 560px; }
-  body.embed .widget-header, body.embed .reviews-strip { display: none; }
+  body.embed .widget { box-shadow: none; }
 
   .widget-header {
     background: var(--red);
