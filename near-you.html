@@ -521,6 +521,13 @@
         <input class="form-input" type="tel" id="phone" placeholder="(555) 000-0000" oninput="validateForm()">
       </div>
 
+      <div class="form-group">
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:var(--gray-700);cursor:pointer;line-height:1.5;">
+          <input type="checkbox" id="smsConsent" style="margin-top:2px;flex-shrink:0;width:16px;height:16px;">
+          <span>📱 Text me class reminders &amp; renewal offers. By checking this box, I agree to receive recurring automated text messages from CPR West Covina at the number provided. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. Consent is not a condition of purchase.</span>
+        </label>
+      </div>
+
       <button class="btn-primary" id="btn3" disabled onclick="goTo(4)">
         Review &amp; pay →
       </button>
@@ -847,6 +854,7 @@ function initiatePayment() {
       course_type: 'bls',
       square_payment_id: '',
       source: new URLSearchParams(location.search).get('src') || 'paid_ad',
+    sms_consent: (document.getElementById('smsConsent') && document.getElementById('smsConsent').checked) ? 'yes' : 'no',
       gclid: trackGclid,
       utm_source: trackUtmSource,
       utm_campaign: trackUtmCampaign || 'near_you',

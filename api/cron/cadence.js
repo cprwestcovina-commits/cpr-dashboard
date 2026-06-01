@@ -131,7 +131,10 @@ async function ghlUpsertContact(lead) {
 
 // Upsert + send SMS, but skip gracefully if the contact opted out (STOP / DND).
 // Returns: 'sent' | 'optout' | 'fail'
+// COMPLIANCE: only text contacts who explicitly opted in (sms_consent === 'yes'). Anyone else is
+// treated like an opt-out (skipped + marked done, never messaged) — protects the SMS sender reputation.
 async function sendSmsIfAllowed(payload, message) {
+  if (payload.sms_consent !== 'yes') return 'optout';
   const c = await ghlUpsertContact(payload);
   if (!c || !c.id) return 'fail';
   if (c.dnd) return 'optout';
@@ -258,6 +261,7 @@ export default async function handler(req, res) {
       date_formatted: d.date_formatted || '',
       time_label: d.time_label || '',
       course_type: d.course_type || 'bls',
+      sms_consent: d.sms_consent,
     };
     const isAclsPals = /acls|pals/i.test(d.course_type || '');
 
@@ -385,6 +389,7 @@ export default async function handler(req, res) {
       email: d.email || '',
       phone: d.phone || '',
       course_type: (d.course_type || 'bls').toLowerCase(),
+      sms_consent: d.sms_consent,
       last_class_date: d.date_formatted || d.date,
       expires_label: expiresLabel,
       days_until: String(touch.days),
