@@ -166,6 +166,62 @@ async function patchFlag(key, fullData, additions) {
   return resp.ok;
 }
 
+const CONFIRM_HOOK = 'https://hook.us2.make.com/v4uxgw7pstxpcjmg63iii2dcy837kcwj';
+async function makeGet(path) {
+  const r = await fetch(`https://us2.make.com/api/v2${path}`, { headers: { 'Authorization': `Token ${MAKE_TOKEN}` } });
+  return r.json();
+}
+function to24(s) {
+  const m = (s || '').match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return '10:00';
+  let h = parseInt(m[1], 10); const min = m[2]; const p = m[3].toUpperCase();
+  if (p === 'PM' && h !== 12) h += 12;
+  if (p === 'AM' && h === 12) h = 0;
+  return String(h).padStart(2, '0') + ':' + min;
+}
+// Match completed Square payments (from the payment webhook log) to pending leads and confirm them.
+// Mirrors the dashboard's auto-reconcile, including the ≥130-point match threshold.
+async function reconcileSquarePayments(all, summary) {
+  const known = new Set(all.filter(r => r.data?.status === 'confirmed' && r.data?.square_payment_id).map(r => r.data.square_payment_id));
+  const logs = (await makeGet(`/hooks/2328890/logs?teamId=${TEAM_ID}&limit=40`)).hookLogs || [];
+  const seen = new Set();
+  const payments = [];
+  for (const h of logs) {
+    let p; try { p = await makeGet(`/hooks/2328890/logs/${h.id}?teamId=${TEAM_ID}`); } catch (e) { continue; }
+    const parsed = p?.hookLog?.data?.parsed;
+    if (!parsed || parsed.type !== 'payment.updated') continue;
+    const pay = parsed.data?.object?.payment;
+    if (!pay || pay.status !== 'COMPLETED' || known.has(pay.id) || seen.has(pay.id)) continue;
+    seen.add(pay.id);
+    payments.push({
+      id: pay.id,
+      email: (pay.buyer_email_address || '').toLowerCase(),
+      firstName: (pay.billing_address && pay.billing_address.first_name) || '',
+      lastName: (pay.billing_address && pay.billing_address.last_name) || '',
+      paidAt: parsed.created_at || h.loggedAt,
+    });
+  }
+  const pending = all.filter(r => r.data?.status === 'pending');
+  for (const u of payments) {
+    const scored = pending.map(r => {
+      const d = r.data; let s = 0;
+      if (d.email && u.email && d.email.toLowerCase() === u.email) s += 100;
+      if (d.first_name && u.firstName && d.first_name.toLowerCase() === u.firstName.toLowerCase()) s += 30;
+      if (d.last_name && u.lastName && d.last_name.toLowerCase() === u.lastName.toLowerCase()) s += 30;
+      if (d.submitted_at && u.paidAt && Math.abs(new Date(u.paidAt).getTime() - new Date(d.submitted_at).getTime()) < 30 * 60000) s += 20;
+      return { r, s };
+    }).filter(x => x.s > 0).sort((a, b) => b.s - a.s);
+    if (!scored[0] || scored[0].s < 130) continue;  // not confident enough → leave for manual review
+    const r = scored[0].r, d = r.data;
+    const ok = await patchFlag(r.key, d, { status: 'confirmed', square_payment_id: u.id });
+    if (!ok) { summary.errors.push(`reconcile patch failed ${u.email}`); continue; }
+    r.data = { ...d, status: 'confirmed', square_payment_id: u.id };
+    const idx = pending.indexOf(r); if (idx >= 0) pending.splice(idx, 1);
+    await fireWebhook(CONFIRM_HOOK, { ...r.data, time_label_24: to24(r.data.time_label), time_end_24: to24(r.data.time_end) });
+    summary.reconciled++;
+  }
+}
+
 // Upsert a record by key via delete-then-create. The datastore enforces a STRICT schema that
 // rejects PATCH with non-schema fields ("Unexpected parameter"), but POST (add) tolerates extra
 // fields. So we delete any existing record and re-add it fresh.
@@ -242,10 +298,15 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ ok: false, error: 'datastore fetch failed: ' + e.message });
   }
+  const summary = { t2hr: 0, t24hr: 0, d5email: 0, d5sms: 0, d7sms: 0, renewal: 0, reconciled: 0, errors: [] };
+
+  // === Server-side Square reconciliation ===
+  // Match completed Square payments to pending leads and confirm them (fire confirmation + calendar)
+  // — so customers get confirmed within ~2hr of paying, even when nobody has the dashboard open.
+  try { await reconcileSquarePayments(all, summary); } catch (e) { summary.errors.push('reconcile: ' + e.message); }
+
   const leads = all.filter(r => r.data?.status === 'pending');
   const confirmedHistorical = all.filter(r => r.data?.status === 'confirmed' && r.data?.source === 'historical_import' && r.data?.past_due_email_sent !== 'yes');
-
-  const summary = { t2hr: 0, t24hr: 0, d5email: 0, d5sms: 0, d7sms: 0, renewal: 0, errors: [] };
 
   for (const lead of leads) {
     const d = lead.data;
