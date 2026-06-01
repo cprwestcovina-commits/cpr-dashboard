@@ -27,6 +27,7 @@ const BROADCAST_CAP = 150;  // max broadcast emails per day (Gmail-safe for a pe
 const UNSUB_BASE = 'https://cpr-dashboard-cprwc.vercel.app/api/unsubscribe';
 const RENEWAL_DAILY_CAP = 0;    // PAUSED past-due (already-expired) outreach until approved
 const RENEWAL_CADENCE_CAP = 25; // upcoming-renewal cadence: max students contacted per day, closest-to-expiry first
+const RENEWAL_SMS_ENABLED = false; // PAUSED — high opt-out rate (non-consented imported contacts). Email-only renewals until A2P + consent are sorted.
 // Upcoming-renewal touch days (before expiration). Tolerance: each lead matches if days_until ∈ [target-1, target+1].
 const RENEWAL_TOUCHES = [
   { days: 90, flag: 'renewal_t90_sent' },
@@ -399,7 +400,7 @@ export default async function handler(req, res) {
     }
     // SMS via GHL direct — skips gracefully if the contact opted out (STOP/DND)
     let smsOk = false, smsOptout = false;
-    if (payload.phone) {
+    if (RENEWAL_SMS_ENABLED && payload.phone) {
       const courseShort = courseLabel(payload.course_type);
       const msg = touch.days === 0
         ? `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires today — renew now to stay current: https://cprwestcovina.com  Use code 30BEATS for $30 off. STOP to opt out.`
