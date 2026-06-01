@@ -55,6 +55,10 @@
     overflow: hidden;
     box-shadow: 0 4px 40px rgba(0,0,0,0.08);
   }
+  /* Embed mode (?embed=1): hide the header/reviews the landing page already shows, drop the shadow */
+  body.embed { background: transparent; }
+  body.embed .widget { box-shadow: none; border-radius: 0; max-width: 560px; }
+  body.embed .widget-header, body.embed .reviews-strip { display: none; }
 
   .widget-header {
     background: var(--red);
@@ -892,6 +896,22 @@ function copyPromo(btn) {
 }
 
 buildDates();
+</script>
+<script>
+/* Embed support: strip chrome in ?embed=1 and report true content height to the parent
+   page so the iframe can auto-size (no white space). Harmless when used standalone. */
+(function () {
+  try {
+    if (new URLSearchParams(location.search).get('embed') === '1') document.body.classList.add('embed');
+  } catch (e) {}
+  function postHeight() {
+    try { parent.postMessage({ type: 'cprwc-embed-h', height: document.documentElement.scrollHeight }, '*'); } catch (e) {}
+  }
+  window.addEventListener('load', postHeight);
+  window.addEventListener('resize', postHeight);
+  if (window.ResizeObserver) { try { new ResizeObserver(postHeight).observe(document.body); } catch (e) {} }
+  setInterval(postHeight, 600); // safety net for step changes / dynamic content
+})();
 </script>
 </body>
 </html>
