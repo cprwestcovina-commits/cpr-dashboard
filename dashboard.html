@@ -1908,7 +1908,7 @@ window.addEventListener('load', () => {
 });
 
 function generateMockData() {
-  const day = (offset) => new Date(Date.now() + offset * 86400000).toISOString().slice(0,10);
+  const day = (offset) => laDateOffset(offset);
   const mock = [
     {key:'bls-1', data:{email:'sarah.kim@hospital.org', first_name:'Sarah', last_name:'Kim', phone:'(626) 555-0142', date:day(0), time_label:'10:00 AM', time_end:'12:00 PM', booking_id:'bls-1', submitted_at:'2026-05-18T16:00:00Z', status:'confirmed', course_type:'bls'}},
     {key:'bls-2', data:{email:'mike.r@nursing.edu', first_name:'Mike', last_name:'Rodriguez', phone:'(626) 555-0288', date:day(0), time_label:'10:00 AM', time_end:'12:00 PM', booking_id:'bls-2', submitted_at:'2026-05-19T09:14:00Z', status:'confirmed', course_type:'bls'}},
@@ -2038,7 +2038,19 @@ async function loadAll() {
 }
 
 // Helpers
-function today() { return new Date().toISOString().slice(0,10); }
+// The whole dashboard runs on Los Angeles time (PST/PDT), regardless of the viewer's browser.
+const LA_TZ = 'America/Los_Angeles';
+// YYYY-MM-DD in LA time. en-CA locale formats as ISO (2026-06-01).
+function laDate(d) { return (d || new Date()).toLocaleDateString('en-CA', { timeZone: LA_TZ }); }
+function laDateOffset(days) { return laDate(new Date(Date.now() + (days || 0) * 86400000)); }
+// LA hour (0–23) and weekday index (0=Sun) for a given date — for time-of-day analytics.
+function laHourDow(d) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: LA_TZ, hour: '2-digit', hour12: false, weekday: 'short' }).formatToParts(d);
+  const hour = parseInt(parts.find(p => p.type === 'hour').value, 10) % 24;
+  const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(parts.find(p => p.type === 'weekday').value);
+  return { hour, dow };
+}
+function today() { return laDate(); }
 function daysFromNow(dateStr) {
   if (!dateStr) return 0;
   const d = new Date(dateStr + 'T00:00:00');
@@ -5000,7 +5012,7 @@ function openManualAdd() {
   document.getElementById('editLastName').value = '';
   document.getElementById('editEmail').value = '';
   document.getElementById('editPhone').value = '';
-  document.getElementById('editDate').value = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+  document.getElementById('editDate').value = laDateOffset(1);
   document.getElementById('editTime').value = 'am';
   document.getElementById('editCourse').value = 'bls';
   document.getElementById('editStatus').value = 'confirmed';  // manual adds are always confirmed
@@ -5289,9 +5301,7 @@ function renderTimeAnalytics() {
     if ((r.data.source || '') === 'historical_import') return;  // imports aren't acquisition leads
     const sa = r.data.submitted_at;
     if (!sa) return;
-    const d = new Date(sa);
-    const h = d.getHours();
-    const w = d.getDay();
+    const { hour: h, dow: w } = laHourDow(new Date(sa));  // LA time, not the viewer's browser
     hourly[h].submitted++;
     dow[w].submitted++;
     if (r.data.status === 'confirmed') {
@@ -6249,9 +6259,9 @@ function previewScenarioMatches(scenarioId) {
   const now = Date.now();
   const ageHr = (r) => r.data.submitted_at ? (now - new Date(r.data.submitted_at).getTime()) / 3600000 : -1;
   const ageDays = (r) => ageHr(r) / 24;
-  const today = new Date().toISOString().slice(0,10);
-  const tomorrow = new Date(now + 86400000).toISOString().slice(0,10);
-  const yesterday = new Date(now - 86400000).toISOString().slice(0,10);
+  const today = laDate();
+  const tomorrow = laDateOffset(1);
+  const yesterday = laDateOffset(-1);
   const isPending = (r) => r.data.status === 'pending';
   const isConfirmed = (r) => r.data.status === 'confirmed';
   const flag = (r,k) => r.data[k] === 'yes';
@@ -6367,7 +6377,7 @@ function renderQuest() {
 
   // Pool: all pending leads + all confirmed within last 90 days
   const t = today();
-  const last90 = (() => { const d = new Date(); d.setDate(d.getDate() - 90); return d.toISOString().slice(0,10); })();
+  const last90 = laDateOffset(-90);
   const leads = RECORDS.filter(r => {
     if (r.data.status === 'pending') return true;
     if (r.data.status === 'confirmed') {
