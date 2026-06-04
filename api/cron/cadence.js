@@ -213,9 +213,23 @@ async function reconcileSquarePayments(all, summary) {
     }).filter(x => x.s > 0).sort((a, b) => b.s - a.s);
     if (!scored[0] || scored[0].s < 130) continue;  // not confident enough → leave for manual review
     const r = scored[0].r, d = r.data;
-    const ok = await patchFlag(r.key, d, { status: 'confirmed', square_payment_id: u.id });
+    // Shared idempotency: re-read the record live right before firing. If the dashboard's
+    // auto-reconcile (or a prior run) already confirmed + emailed this person, the
+    // confirm_email_sent flag will be set — skip the webhook so we never double-send.
+    try {
+      const fresh = await makeGet(`/data-stores/100809/data/${encodeURIComponent(r.key)}?teamId=${TEAM_ID}`);
+      const fd = (fresh && (fresh.record?.data || fresh.data)) || null;
+      if (fd && fd.confirm_email_sent === 'yes') {
+        r.data = fd;
+        const idx0 = pending.indexOf(r); if (idx0 >= 0) pending.splice(idx0, 1);
+        continue;
+      }
+    } catch (e) { /* if the lookup fails, fall through cautiously */ }
+    // Claim it in the same write that confirms — sets the flag BEFORE firing so a racing
+    // dashboard re-read sees it and bails.
+    const ok = await patchFlag(r.key, d, { status: 'confirmed', square_payment_id: u.id, confirm_email_sent: 'yes' });
     if (!ok) { summary.errors.push(`reconcile patch failed ${u.email}`); continue; }
-    r.data = { ...d, status: 'confirmed', square_payment_id: u.id };
+    r.data = { ...d, status: 'confirmed', square_payment_id: u.id, confirm_email_sent: 'yes' };
     const idx = pending.indexOf(r); if (idx >= 0) pending.splice(idx, 1);
     await fireWebhook(CONFIRM_HOOK, { ...r.data, time_label_24: to24(r.data.time_label), time_end_24: to24(r.data.time_end) });
     summary.reconciled++;
