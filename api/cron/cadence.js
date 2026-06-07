@@ -44,7 +44,9 @@ const RENEWAL_TOUCHES = [
 // Gated OFF until go-live: needs the prod Square token, the /api/recovery-checkout endpoint,
 // and recovery mode live on every course widget. Until RECOVERY_V2_ENABLED=1, the old cadence runs.
 const RECOVERY_V2 = process.env.RECOVERY_V2_ENABLED === '1';
-const RCV_EMAIL_HOOK = process.env.RCV_EMAIL_HOOK || ''; // set once the Make recovery-email scenario exists
+// Reuse the (now-freed) Day-5 email hook + scenario 5235916 as the recovery-email sender —
+// the old Day-5 path is disabled under v2, so no conflict and no new webhook needed.
+const RCV_EMAIL_HOOK = process.env.RCV_EMAIL_HOOK || D5_EMAIL_HOOK;
 const SHORT_BASE = 'https://cpr-dashboard-cprwc.vercel.app'; // host for the short SMS redirect (/api/r)
 const BIZ_START = 9, BIZ_END = 19; // business-hours window for texts (9 AM–7 PM PT)
 // Tier windows by lead age (hrs). Backfill-safe: a lead only ever gets the tier its age falls into.
@@ -87,6 +89,7 @@ function recoveryEmailFields(d, tier, amount, url) {
   const amt = `$${Math.round(amount / 100)}`;
   if (tier.final) {
     return {
+      course_label: course,
       subject: `Final chance, ${first} — ${amt} off your ${course} (expires in 48 hrs)`,
       headline: `Your last chance — ${amt} off`,
       subhead: `This is the best offer we can do. With this code you won't find AHA certification cheaper in SoCal — and reschedules are always free. Pick any date that works.`,
@@ -97,6 +100,7 @@ function recoveryEmailFields(d, tier, amount, url) {
     };
   }
   return {
+    course_label: course,
     subject: `${first}, here's ${amt} off your ${course}`,
     headline: `${amt} off — just for you`,
     subhead: `Your discount is already applied — just pick any date that works. Reschedules are always free.`,
