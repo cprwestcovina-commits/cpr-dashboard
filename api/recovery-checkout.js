@@ -85,6 +85,20 @@ export default async function handler(req, res) {
     const data = await r.json();
     if (!r.ok || !data.payment_link) return res.status(502).json({ error: 'square link failed', detail: data.errors || data });
 
+    // Record the order/link IDs on the lead so reconcile can match the payment exactly
+    // and the cleanup job can delete the link later.
+    await fetch(`${DS_URL}/${encodeURIComponent(v.payload.k)}?teamId=${TEAM_ID}`, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Token ${MAKE_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recovery_order_id: data.payment_link.order_id || '',
+        recovery_link_id: data.payment_link.id || '',
+        recovery_tier: v.payload.t || '',
+        recovery_channel: v.payload.ch || '',
+        recovery_amount_cents: String(discount),
+      }),
+    }).catch(() => {});
+
     return res.status(200).json({
       url: data.payment_link.url,
       order_id: data.payment_link.order_id,

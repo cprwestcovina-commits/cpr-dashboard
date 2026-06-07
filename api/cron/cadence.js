@@ -295,6 +295,7 @@ async function reconcileSquarePayments(all, summary) {
     seen.add(pay.id);
     payments.push({
       id: pay.id,
+      orderId: pay.order_id || '',
       email: (pay.buyer_email_address || '').toLowerCase(),
       firstName: (pay.billing_address && pay.billing_address.first_name) || '',
       lastName: (pay.billing_address && pay.billing_address.last_name) || '',
@@ -305,6 +306,8 @@ async function reconcileSquarePayments(all, summary) {
   for (const u of payments) {
     const scored = pending.map(r => {
       const d = r.data; let s = 0;
+      // Exact recovery match: a discounted recovery link carries our order_id → unambiguous.
+      if (d.recovery_order_id && u.orderId && d.recovery_order_id === u.orderId) s += 1000;
       if (d.email && u.email && d.email.toLowerCase() === u.email) s += 100;
       if (d.first_name && u.firstName && d.first_name.toLowerCase() === u.firstName.toLowerCase()) s += 30;
       if (d.last_name && u.lastName && d.last_name.toLowerCase() === u.lastName.toLowerCase()) s += 30;
@@ -327,12 +330,35 @@ async function reconcileSquarePayments(all, summary) {
     } catch (e) { /* if the lookup fails, fall through cautiously */ }
     // Claim it in the same write that confirms — sets the flag BEFORE firing so a racing
     // dashboard re-read sees it and bails.
-    const ok = await patchFlag(r.key, d, { status: 'confirmed', square_payment_id: u.id, confirm_email_sent: 'yes' });
+    // If the payment matched our recovery order_id, this conversion came from a discount link.
+    const isRecovery = !!(d.recovery_order_id && u.orderId && d.recovery_order_id === u.orderId);
+    const extra = isRecovery ? { recovery_redeemed: 'yes' } : {};
+    const ok = await patchFlag(r.key, d, { status: 'confirmed', square_payment_id: u.id, confirm_email_sent: 'yes', ...extra });
     if (!ok) { summary.errors.push(`reconcile patch failed ${u.email}`); continue; }
-    r.data = { ...d, status: 'confirmed', square_payment_id: u.id, confirm_email_sent: 'yes' };
+    r.data = { ...d, status: 'confirmed', square_payment_id: u.id, confirm_email_sent: 'yes', ...extra };
+    if (isRecovery) summary.rcvRedeemed = (summary.rcvRedeemed || 0) + 1;
     const idx = pending.indexOf(r); if (idx >= 0) pending.splice(idx, 1);
     await fireWebhook(CONFIRM_HOOK, { ...r.data, time_label_24: to24(r.data.time_label), time_end_24: to24(r.data.time_end) });
     summary.reconciled++;
+  }
+}
+
+// Delete recovery payment links once they're spent (paid → single-use) or the lead is long dead,
+// so the Square account doesn't accumulate dead links.
+async function cleanupRecoveryLinks(all, summary) {
+  const SQ_TOKEN = process.env.SQUARE_ACCESS_TOKEN;
+  if (!SQ_TOKEN) return;
+  const base = process.env.SQUARE_ENV === 'production' ? 'https://connect.squareup.com' : 'https://connect.squareupsandbox.com';
+  for (const r of all) {
+    const d = r.data; if (!d || !d.recovery_link_id) continue;
+    const paid = d.status === 'confirmed';
+    const old = d.submitted_at && (Date.now() - new Date(d.submitted_at).getTime()) > 10 * 86400000;
+    if (!paid && !old) continue;
+    await fetch(`${base}/v2/online-checkout/payment-links/${d.recovery_link_id}`, {
+      method: 'DELETE', headers: { 'Square-Version': '2025-01-23', 'Authorization': `Bearer ${SQ_TOKEN}` },
+    }).catch(() => {});
+    await patchFlag(r.key, d, { recovery_link_id: '' });
+    summary.rcvLinksCleaned = (summary.rcvLinksCleaned || 0) + 1;
   }
 }
 
@@ -418,6 +444,7 @@ export default async function handler(req, res) {
   // Match completed Square payments to pending leads and confirm them (fire confirmation + calendar)
   // — so customers get confirmed within ~2hr of paying, even when nobody has the dashboard open.
   try { await reconcileSquarePayments(all, summary); } catch (e) { summary.errors.push('reconcile: ' + e.message); }
+  if (RECOVERY_V2) { try { await cleanupRecoveryLinks(all, summary); } catch (e) { summary.errors.push('cleanup: ' + e.message); } }
 
   const leads = all.filter(r => r.data?.status === 'pending');
   const confirmedHistorical = all.filter(r => r.data?.status === 'confirmed' && r.data?.source === 'historical_import' && r.data?.past_due_email_sent !== 'yes');
