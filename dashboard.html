@@ -4920,6 +4920,46 @@ function winStageTag(d) {
   return `<span style="background:var(--gray-100);color:var(--gray-600);font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;">⚡ Direct</span>`;
 }
 
+// Wins kanban for leads — same style as renewals: columns = the touch that closed them.
+const LEADS_WIN_COLS = [
+  { key: 'direct', label: '⚡ Direct' },
+  { key: 't1',     label: '🎟️ 24h' },
+  { key: 't2',     label: '🎟️ 48h' },
+  { key: 't3',     label: '🎟️ 96h' },
+  { key: 't4',     label: '🏆 Final' },
+  { key: 'legacy', label: '📧 Recovery' },
+];
+function winStageKey(d) {
+  if (['t1','t2','t3','t4'].includes(d.recovery_tier)) return d.recovery_tier;
+  if (typeof lastRecoveryStage === 'function' && lastRecoveryStage(d)) return 'legacy';
+  if (d.recovery_amount_cents || d.recovery_redeemed === 'yes') return 'legacy';
+  return 'direct';
+}
+function renderLeadsWonKanban(wins) {
+  const by = {}; LEADS_WIN_COLS.forEach(c => by[c.key] = []);
+  wins.forEach(r => { const k = winStageKey(r.data); (by[k] || by.direct).push(r); });
+  const card = r => { const d = r.data;
+    const days = d.submitted_at ? Math.round((Date.now() - new Date(d.submitted_at).getTime())/86400000) : '?';
+    return `<div class="kb-card" style="border-left:4px solid #16A085;">
+      <div style="font-weight:700;">${escapeHtml(d.first_name||'')} ${escapeHtml(d.last_name||'')}</div>
+      <div style="font-size:11px;color:var(--gray-700);margin:4px 0;">
+        <span style="background:#F3F4F6;padding:1px 6px;border-radius:3px;font-weight:600;">${courseLabel(d.course_type)}</span>
+        ${d.recovery_channel ? `<span style="font-size:10px;color:var(--gray-500);margin-left:4px;">${d.recovery_channel === 'sms' ? '💬 text' : '📧 email'}</span>` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--gray-500);">Class: ${escapeHtml(fmtDate(d.date))} · ${days}d ago</div>
+      <div style="font-size:12px;color:var(--green);font-weight:700;margin-top:2px;">$${amountFor(r).toLocaleString()}</div>
+      <div style="margin-top:6px;font-size:12px;"><a href="mailto:${escapeHtml(d.email)}" class="action-link">${escapeHtml(d.email)}</a></div>
+      <div class="kb-actions" style="margin-top:6px;"><button class="kb-btn" onclick="openEdit('${escapeHtml(r.key)}')">✏ Edit</button></div>
+    </div>`; };
+  return `<div class="kanban" style="grid-auto-flow:initial;grid-auto-columns:initial;grid-template-columns:repeat(${LEADS_WIN_COLS.length},1fr);overflow-x:visible;">
+    ${LEADS_WIN_COLS.map(c => `<div class="kb-col">
+      <div class="kb-col-header"><span>${c.label}</span><span class="kb-col-count">${by[c.key].length}</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow-y:auto;padding-right:2px;">
+        ${by[c.key].length ? by[c.key].map(card).join('') : '<div style="font-size:11px;color:var(--gray-500);text-align:center;padding:20px 0;">—</div>'}
+      </div></div>`).join('')}
+  </div>`;
+}
+
 // ====================================================================
 // LEADS WON view — shows converted leads with stats
 // ====================================================================
@@ -5036,29 +5076,9 @@ function renderLeadsWon() {
       </tbody>
     </table>` : ''}
 
-    <h3 style="margin:0 0 10px;font-size:16px;">🏆 All Wins ${wins.length ? `(${wins.length})` : ''}</h3>
-    ${recentWins.length ? `<table style="width:100%;"><thead><tr>
-      <th>Student</th><th>Email</th><th>Phone</th><th>Class Date</th><th>Submitted</th><th>Course</th><th>Converted via</th><th>Revenue</th><th></th>
-    </tr></thead><tbody>
-      ${recentWins.map(r => {
-        const d = r.data;
-        const days = d.submitted_at ? Math.round((Date.now() - new Date(d.submitted_at).getTime())/86400000) : '?';
-        return `<tr>
-          <td><strong>${escapeHtml(d.first_name||'')} ${escapeHtml(d.last_name||'')}</strong></td>
-          <td><a class="action-link" href="mailto:${escapeHtml(d.email)}">${escapeHtml(d.email)}</a></td>
-          <td><a class="action-link" href="tel:${escapeHtml((d.phone||'').replace(/\D/g,''))}">${escapeHtml(d.phone || '')}</a></td>
-          <td>${escapeHtml(fmtDate(d.date))}<br><span class="small">${escapeHtml(d.time_label || '')}</span></td>
-          <td><span class="small">${days}d ago</span></td>
-          <td>${courseLabel(d.course_type)}</td>
-          <td>${winStageTag(d)}</td>
-          <td><strong style="color:var(--green);">$${amountFor(r)}</strong></td>
-          <td style="white-space:nowrap;">
-            <button class="btn" style="padding:4px 8px;font-size:11px;" onclick="openEdit('${escapeHtml(r.key)}')">Edit</button>
-            <button class="btn" style="padding:4px 8px;font-size:11px;background:#fef2f2;color:#b91c1c;border-color:#fecaca;" onclick="actionDelete('${escapeHtml(r.key)}')" title="Delete this record">🗑</button>
-          </td>
-        </tr>`;
-      }).join('')}
-    </tbody></table>` : '<div class="empty">No wins yet. Come on, sell some classes 💪</div>'}
+    <h3 style="margin:0 0 4px;font-size:16px;">🏆 All Wins ${wins.length ? `(${wins.length})` : ''}</h3>
+    <p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">Each win sits in the touch that closed it — ⚡ Direct (paid before any recovery touch), the recovery tiers (24h/48h/96h/Final), or 📧 Recovery (older cadence).</p>
+    ${recentWins.length ? renderLeadsWonKanban(recentWins) : '<div class="empty">No wins yet. Come on, sell some classes 💪</div>'}
   `;
 
   // Hide the monthly loss section while in won view
