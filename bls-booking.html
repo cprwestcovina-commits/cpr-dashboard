@@ -441,6 +441,12 @@
     <button type="button" class="promo-copy-btn" onclick="copyPromo(this)">Copy</button>
   </div>
 
+  <!-- Recovery discount banner — only shown when arriving via a signed ?rcv= link -->
+  <div id="recoveryBanner" style="display:none;background:linear-gradient(135deg,#0f7a3d,#0aa05a);color:#fff;padding:12px 16px;border-radius:12px;margin:0 0 6px;text-align:center;">
+    <div id="recoveryHeadline" style="font-size:15px;font-weight:800;">💚 Your discount is applied</div>
+    <div id="recoveryCountdown" style="font-size:13px;font-weight:600;margin-top:3px;opacity:.95;"></div>
+  </div>
+
   <a class="reviews-strip" href="https://www.google.com/search?q=cpr+west+covina" target="_blank" rel="noopener" style="text-decoration:none;">
     <span class="stars">★★★★★</span>
     <span class="rating">4.9</span>
@@ -604,6 +610,65 @@ let selectedDate = null;
 let selectedTime = null;
 let dateOffset = 0;
 const DAYS_PER_PAGE = 6;
+
+// ── Recovery discount mode ──────────────────────────────────────────
+// Activated only when the page is opened via a signed ?rcv= link from a recovery email/text.
+// The token payload is readable (for the banner + countdown); the SIGNATURE is verified
+// server-side at checkout, so the displayed discount can't be forged or extended here.
+const RECOVERY = { active: false, token: null, payload: null, api: null, timer: null };
+function _b64uToStr(s){ try { s=s.replace(/-/g,'+').replace(/_/g,'/'); return decodeURIComponent(escape(atob(s))); } catch(_){ return ''; } }
+function recoveryInit() {
+  const p = new URLSearchParams(location.search);
+  const tok = p.get('rcv'); if (!tok) return;
+  let payload; try { payload = JSON.parse(_b64uToStr(tok.split('.')[0])); } catch(_) { return; }
+  if (!payload || !payload.x) return;
+  RECOVERY.active = true;
+  RECOVERY.token = tok;
+  RECOVERY.payload = payload;
+  // Default to the live Vercel endpoint; ?api= override lets us point at a local server for demos.
+  RECOVERY.api = p.get('api') || 'https://cpr-dashboard-cprwc.vercel.app/api/recovery-checkout';
+  const banner = document.getElementById('recoveryBanner');
+  if (banner) banner.style.display = 'block';
+  // Hide the generic promo banner — the recovery offer replaces it (avoids two competing codes).
+  const promo = document.querySelector('.promo-banner');
+  if (promo) promo.style.display = 'none';
+  recoveryTick();
+  RECOVERY.timer = setInterval(recoveryTick, 1000);
+}
+function recoveryTick() {
+  const { a, x, t } = RECOVERY.payload || {};
+  const head = document.getElementById('recoveryHeadline');
+  const cd = document.getElementById('recoveryCountdown');
+  const left = Number(x) - Date.now();
+  if (left > 0) {
+    if (head) head.textContent = `💚 $${Math.round((a||0)/100)} off applied — just for you`;
+    const h = Math.floor(left/3600000), m = Math.floor(left%3600000/60000), s = Math.floor(left%60000/1000);
+    if (cd) cd.textContent = `⏳ Expires in ${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s — pick any date below`;
+  } else {
+    if (head) head.textContent = `⏰ Your offer expired — $20 backup applied instead`;
+    if (cd) cd.textContent = `You still save $20 on any date below`;
+    if (RECOVERY.timer) { clearInterval(RECOVERY.timer); RECOVERY.timer = null; }
+  }
+}
+async function recoveryPay(b) {
+  const payBtn = document.getElementById('payBtn');
+  const orig = payBtn ? payBtn.textContent : '';
+  if (payBtn) { payBtn.disabled = true; payBtn.textContent = 'Creating your checkout…'; }
+  try {
+    const res = await fetch(RECOVERY.api, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: RECOVERY.token, date: b.date, date_formatted: b.date_formatted, time_label: b.time_label, time_end: b.time_end }),
+    });
+    const j = await res.json();
+    if (j && j.url) { window.open(j.url, '_blank'); document.getElementById('postPayNote').style.display = 'block'; }
+    else { alert("Sorry — we couldn't load your discounted checkout. Please try again or call (626) 605-2067."); }
+  } catch (e) {
+    alert('Network error — please try again.');
+  } finally {
+    if (payBtn) { payBtn.disabled = false; payBtn.textContent = orig; }
+  }
+}
+document.addEventListener('DOMContentLoaded', recoveryInit);
 
 function getUpcomingDays() {
   const days = [];
@@ -820,6 +885,11 @@ function initiatePayment() {
     utm_term: trackUtmTerm,
     landing_url: trackLandingUrl,
   };
+
+  // Recovery mode: the lead already exists — don't create a duplicate. Hand off to the
+  // checkout endpoint, which verifies the token, applies the discount for the chosen date,
+  // updates the existing record, and returns a one-time discounted Square link.
+  if (RECOVERY.active) { recoveryPay(booking); return; }
 
   // Fire to Make.com webhook (sends nudge email + admin alert)
   fetch(CONFIG.makeWebhookUrl, {
