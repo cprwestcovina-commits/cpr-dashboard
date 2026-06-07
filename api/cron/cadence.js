@@ -11,6 +11,8 @@
 //
 // Idempotent: each lead's nudge flag prevents re-sending.
 
+import { signToken } from '../../lib/recovery-token.js';
+
 const MAKE_TOKEN = '4317021d-3786-4640-8265-34e63c0aaa2e';
 // GHL v2 Private Integration Token (created 2026-05-30) — v1 SMS endpoint was deprecated
 const GHL_PIT = process.env.GHL_PIT || 'pit-8be319e0-c309-420e-a75c-c9b6d701d994';
@@ -37,6 +39,82 @@ const RENEWAL_TOUCHES = [
   { days: 7,  flag: 'renewal_t7_sent'  },
   { days: 0,  flag: 'renewal_t0_sent'  },
 ];
+
+// ─── Recovery cadence v2 (personalized discount links) ──────────────────────────────
+// Gated OFF until go-live: needs the prod Square token, the /api/recovery-checkout endpoint,
+// and recovery mode live on every course widget. Until RECOVERY_V2_ENABLED=1, the old cadence runs.
+const RECOVERY_V2 = process.env.RECOVERY_V2_ENABLED === '1';
+const RCV_EMAIL_HOOK = process.env.RCV_EMAIL_HOOK || ''; // set once the Make recovery-email scenario exists
+const SHORT_BASE = 'https://cpr-dashboard-cprwc.vercel.app'; // host for the short SMS redirect (/api/r)
+const BIZ_START = 9, BIZ_END = 19; // business-hours window for texts (9 AM–7 PM PT)
+// Tier windows by lead age (hrs). Backfill-safe: a lead only ever gets the tier its age falls into.
+const RECOVERY_TIERS = [
+  { idx: 0, key: 't1', from: 24,  to: 48,  validDays: 3, final: false },
+  { idx: 1, key: 't2', from: 48,  to: 96,  validDays: 3, final: false },
+  { idx: 2, key: 't3', from: 96,  to: 168, validDays: 3, final: false },
+  { idx: 3, key: 't4', from: 168, to: 360, validDays: 2, final: true  },
+];
+// Per-course discount ladders (cents), index = tier.
+const RECOVERY_LADDER = {
+  bls:         [1500, 2000, 3000, 4000],
+  bls_renewal: [1500, 2000, 3000, 4000],
+  heartsaver:  [1000, 1500, 2000, 3000],
+  acls:        [2500, 3500, 4000, 5000],
+  pals:        [2500, 3500, 4000, 5000],
+};
+function rcvNormCourse(ct) {
+  const c = (ct || '').toLowerCase().replace(/^aha_/, '');
+  if (c === 'rnw' || c === 'renewal' || c === 'bls_renewal') return 'bls_renewal';
+  if (c === 'hs') return 'heartsaver';
+  if (['bls', 'heartsaver', 'acls', 'pals'].includes(c)) return c;
+  return 'bls';
+}
+function recoveryAmount(ct, idx) { return (RECOVERY_LADDER[rcvNormCourse(ct)] || RECOVERY_LADDER.bls)[idx]; }
+function recoveryWidget(ct) {
+  const c = rcvNormCourse(ct);
+  if (c === 'heartsaver') return 'https://cpr-dashboard-cprwc.vercel.app/heartsaver.html';
+  if (c === 'acls') return 'https://cpr-dashboard-cprwc.vercel.app/acls.html';
+  if (c === 'pals') return 'https://cpr-dashboard-cprwc.vercel.app/pals.html';
+  return 'https://cprwestcovina-commits.github.io/bls-booking/bls-booking.html';
+}
+function ptHourNow() {
+  return Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', hour12: false }).format(new Date()));
+}
+// Flat fields for the Make recovery-email scenario (dumb fill-in-the-blank — no formulas).
+function recoveryEmailFields(d, tier, amount, url) {
+  const first = d.first_name || 'there';
+  const course = courseLabel(d.course_type);
+  const amt = `$${Math.round(amount / 100)}`;
+  if (tier.final) {
+    return {
+      subject: `Final chance, ${first} — ${amt} off your ${course} (expires in 48 hrs)`,
+      headline: `Your last chance — ${amt} off`,
+      subhead: `This is the best offer we can do. With this code you won't find AHA certification cheaper in SoCal — and reschedules are always free. Pick any date that works.`,
+      cta_label: 'Claim my discount →',
+      book_url: url,
+      expiry_text: 'Expires in 48 hours',
+      backup_text: 'If it expires, you can still use SAVE20 for $20 off, anytime.',
+    };
+  }
+  return {
+    subject: `${first}, here's ${amt} off your ${course}`,
+    headline: `${amt} off — just for you`,
+    subhead: `Your discount is already applied — just pick any date that works. Reschedules are always free.`,
+    cta_label: 'Pick my date →',
+    book_url: url,
+    expiry_text: 'Valid for 3 days',
+    backup_text: '',
+  };
+}
+function recoverySms(d, tier, amount, shortUrl) {
+  const first = d.first_name || 'there';
+  const course = courseLabel(d.course_type);
+  const amt = `$${Math.round(amount / 100)}`;
+  if (tier.final) {
+    return `${first}, last chance — ${amt} off your ${course} on ${d.date_formatted}, expires in 48 hrs. Best price we can do: ${shortUrl}  Reply STOP to opt out.`;
+  }
+  return `Hi ${first}, Caroline from CPR West Covina — here's ${amt} off your ${course} on ${d.date_formatted}. Pick any date: ${shortUrl}  Reply STOP to opt out.`;
+}
 
 function ageHours(submittedAt) {
   if (!submittedAt) return -1;
@@ -358,6 +436,45 @@ export default async function handler(req, res) {
     };
     const isAclsPals = /acls|pals/i.test(d.course_type || '');
 
+    if (RECOVERY_V2) {
+      // ─── Recovery cadence v2: 4 tiers, personalized signed ?rcv= discount links ───
+      // Only the single tier whose window contains the lead's age fires (backfill-safe: a lead
+      // who enters mid-cadence gets only its current tier, never a stale "24h" offer).
+      const tier = RECOVERY_TIERS.find(t => age >= t.from && age < t.to);
+      if (tier) {
+        const amount = recoveryAmount(d.course_type, tier.idx);
+        const expiry = Date.now() + tier.validDays * 86400000;
+        const flagE = `rcv_${tier.key}_email`, flagS = `rcv_${tier.key}_sms`;
+
+        // EMAIL
+        if (RCV_EMAIL_HOOK && d[flagE] !== 'yes') {
+          const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ch: 'email', x: expiry });
+          const url = `${recoveryWidget(d.course_type)}?rcv=${tok}&src=recovery&utm_content=${flagE}`;
+          if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryEmailFields(d, tier, amount, url) })) {
+            await patchFlag(lead.key, d, { [flagE]: 'yes', recovery_tier: tier.key });
+            summary.rcvEmail = (summary.rcvEmail || 0) + 1;
+          } else summary.errors.push(`rcv ${tier.key} email: ${payload.first_name}`);
+        }
+
+        // SMS — consented + business hours (9 AM–7 PM PT). Outside hours → hold for next run.
+        if (d[flagS] !== 'yes') {
+          const hr = ptHourNow();
+          if (hr >= BIZ_START && hr < BIZ_END) {
+            const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ch: 'sms', x: expiry });
+            // Store token so the short SMS redirect (/api/r?k=) can resolve it; keep local copy fresh.
+            await patchFlag(lead.key, d, { recovery_token: tok }); d.recovery_token = tok;
+            const shortUrl = `${SHORT_BASE}/api/r?k=${encodeURIComponent(lead.key)}`;
+            const r = await sendSmsIfAllowed(payload, recoverySms(d, tier, amount, shortUrl));
+            if (r === 'sent') {
+              await patchFlag(lead.key, d, { [flagS]: 'yes', recovery_tier: tier.key, recovery_channel: 'sms' });
+              summary.rcvSms = (summary.rcvSms || 0) + 1;
+            } else if (r === 'optout') {
+              await patchFlag(lead.key, d, { [flagS]: 'yes' });
+            } else summary.errors.push(`rcv ${tier.key} sms: ${payload.first_name} (send failed)`);
+          }
+        }
+      }
+    } else {
     // T+2hr email — proven webhook
     if (age >= 2 && age <= 168 && d.nudge2_sent !== 'yes') {
       if (await fireWebhook(T2HR_HOOK, payload)) summary.t2hr++;
@@ -410,6 +527,7 @@ export default async function handler(req, res) {
       } else if (r === 'optout') {
         await patchFlag(lead.key, d, { nudge_d7sms_sent: 'yes' });
       }
+    }
     }
   }
 
