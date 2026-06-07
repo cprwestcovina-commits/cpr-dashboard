@@ -2316,6 +2316,11 @@ function setLeadsSourceFilter(src) {
 }
 // Match a record against the current source filter
 function leadsSourceMatch(record) {
+  const d = record.data || record;
+  // Leads tab = website-acquired leads ONLY. Never count CSV/historical student imports
+  // (they'd inflate lead counts, wins, and conversion rate).
+  if ((d.source || '') === 'historical_import') return false;
+  if ((d.booking_id || '').startsWith('hist-') || (record.key || '').startsWith('hist-')) return false;
   if (leadsSourceFilter === 'all') return true;
   return sourceOf(record) === leadsSourceFilter;
 }
@@ -4995,7 +5000,7 @@ function renderLeadsWon() {
   // Conversion rate: wins / (wins + cancelled + still-pending) submitted in same period
   const totalLeadsThisMonth = RECORDS.filter(r => {
     const sa = (r.data.submitted_at || '').slice(0,10);
-    return sa >= monthStart && !(r.data.booking_id || '').startsWith('manual-');
+    return sa >= monthStart && !(r.data.booking_id || '').startsWith('manual-') && leadsSourceMatch(r);
   });
   const conversionRate = totalLeadsThisMonth.length
     ? Math.round(100 * thisMonthWins.length / totalLeadsThisMonth.length)
