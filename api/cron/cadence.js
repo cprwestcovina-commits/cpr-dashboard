@@ -96,7 +96,7 @@ function recoveryEmailFields(d, tier, amount, url) {
       cta_label: 'Claim my discount →',
       book_url: url,
       expiry_text: 'Expires in 48 hours',
-      backup_text: 'If it expires, you can still use SAVE20 for $20 off, anytime.',
+      backup_text: 'Even after the deadline, your link still saves you $20 — so you never miss out.',
     };
   }
   return {
