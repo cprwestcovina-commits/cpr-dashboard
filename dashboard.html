@@ -1710,6 +1710,7 @@
           <h2 style="margin:0;">Renewal Pipeline <span class="count" id="renewalsTabCount">0</span></h2>
           <div style="display:flex;gap:4px;background:var(--gray-100);padding:3px;border-radius:8px;">
             <button id="renewalsViewKanban" onclick="setRenewalsView('kanban')" style="border:none;background:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,0.08);">🎯 Pipeline</button>
+            <button id="renewalsViewWins" onclick="setRenewalsView('wins')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">🏆 Wins</button>
             <button id="renewalsViewTable" onclick="setRenewalsView('table')" style="border:none;background:transparent;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;">📋 Table</button>
           </div>
         </div>
@@ -3381,7 +3382,50 @@ function setRenewalsView(v) {
   document.getElementById('renewalsViewKanban').style.boxShadow = v === 'kanban' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
   document.getElementById('renewalsViewTable').style.background = v === 'table' ? '#fff' : 'transparent';
   document.getElementById('renewalsViewTable').style.boxShadow = v === 'table' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none';
+  const wbtn = document.getElementById('renewalsViewWins');
+  if (wbtn) { wbtn.style.background = v === 'wins' ? '#fff' : 'transparent'; wbtn.style.boxShadow = v === 'wins' ? '0 1px 2px rgba(0,0,0,0.08)' : 'none'; }
   renderRenewalsPage();
+}
+
+// Which renewal touch last reached a won re-activation (the conversion stage).
+// Reads the CONTACTED record's touch flags (the win itself is the newer booking).
+function renewalWinStage(winRec, contacted) {
+  const t = contacted.get((winRec.data.email || '').toLowerCase());
+  if (t) {
+    // RENEWAL_TOUCHES is 90→0; the last sent = smallest days with flag 'yes'
+    const sent = RENEWAL_TOUCHES.filter(x => t.data[x.flag] === 'yes');
+    if (sent.length) {
+      const last = sent[sent.length - 1];
+      return { key: 't' + last.days, label: last.days === 0 ? 'Day-of' : `T-${last.days}` };
+    }
+  }
+  return { key: 'direct', label: 'Direct' };
+}
+// Wins kanban: columns = touch stages, each won renewal placed in the stage that converted it.
+function renderRenewalsWinsKanban() {
+  const contacted = buildRenewalContactedMap();
+  const wins = RECORDS.filter(r => isRenewalWin(r, contacted));
+  const COLS = [...RENEWAL_TOUCHES.map(x => ({ key: 't' + x.days, label: x.days === 0 ? '🎯 Day-of' : `T-${x.days}` })), { key: 'direct', label: '⚡ Direct' }];
+  const by = {}; COLS.forEach(c => by[c.key] = []);
+  wins.forEach(r => { const st = renewalWinStage(r, contacted); (by[st.key] || by.direct).push({ r, st }); });
+  const card = ({ r, st }) => `<div class="kb-card" style="border-left:4px solid #16A085;">
+    <div style="font-weight:700;">${escapeHtml(r.data.first_name||'')} ${escapeHtml(r.data.last_name||'')}</div>
+    <div style="font-size:11px;color:var(--gray-700);margin:4px 0;">
+      <span style="background:#F3F4F6;padding:1px 6px;border-radius:3px;font-weight:600;">${courseLabelFull(r.data.course_type)}</span>
+      <span style="background:#ecfdf3;color:#067647;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;margin-left:4px;">🏆 ${st.label}</span>
+    </div>
+    <div style="font-size:11px;color:var(--gray-500);">Re-booked: ${escapeHtml(fmtDateY(r.data.date))}</div>
+    <div style="font-size:12px;color:var(--green);font-weight:700;margin-top:2px;">$${amountFor(r).toLocaleString()}</div>
+    <div style="margin-top:6px;font-size:12px;"><a href="mailto:${escapeHtml(r.data.email)}" class="action-link">${escapeHtml(r.data.email)}</a></div>
+  </div>`;
+  return `<p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">${wins.length} renewal re-activations, placed in the cadence stage that last reached them before they re-booked. "Direct" = renewed without a tracked touch.</p>
+    <div class="kanban" style="grid-auto-flow:initial;grid-auto-columns:initial;grid-template-columns:repeat(${COLS.length},1fr);overflow-x:visible;">
+    ${COLS.map(c => `<div class="kb-col">
+      <div class="kb-col-header"><span>${c.label}</span><span class="kb-col-count">${by[c.key].length}</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow-y:auto;padding-right:2px;">
+        ${by[c.key].length ? by[c.key].map(card).join('') : '<div style="font-size:11px;color:var(--gray-500);text-align:center;padding:20px 0;">—</div>'}
+      </div></div>`).join('')}
+    </div>`;
 }
 
 // === Renewal-win attribution ===
@@ -4170,6 +4214,11 @@ function renderRenewalsPage() {
 
   updateRenewalWatchdog(rows);
   document.getElementById('renewalsTabCount').textContent = rows.length;
+  // Wins view: re-activations placed in the cadence stage that converted them
+  if (getRenewalsView() === 'wins') {
+    document.getElementById('renewalsList').innerHTML = renderRenewalsWinsKanban();
+    return;
+  }
   // Pipeline view: show only past-due (overdue) records in the kanban
   if (getRenewalsView() === 'kanban') {
     // Only people approaching renewal (within 90 days), not yet expired
@@ -4853,6 +4902,24 @@ function setLeadsView_uiOnly(v) {
   });
 }
 
+// Which touch closed a won lead — a small tag for the Wins view.
+const RCV_TIER_TAG = { t1:'24h', t2:'48h', t3:'96h', t4:'Final' };
+function winStageTag(d) {
+  // v2 personalized-link recovery
+  if (d.recovery_tier || d.recovery_redeemed === 'yes' || d.recovery_amount_cents) {
+    const tier = RCV_TIER_TAG[d.recovery_tier] || d.recovery_tier || 'recovery';
+    const ch = d.recovery_channel === 'sms' ? '💬 text' : '📧 email';
+    const amt = d.recovery_amount_cents ? ` ·$${Math.round(d.recovery_amount_cents/100)} off` : '';
+    return `<span style="background:#ecfdf3;color:#067647;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;">🎟️ ${tier} ${ch}${amt}</span>`;
+  }
+  // legacy recovery-stage flags (pre-v2)
+  if (typeof lastRecoveryStage === 'function') {
+    const s = lastRecoveryStage(d);
+    if (s) return `<span style="background:#eff6ff;color:#1d4ed8;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;">${s.emoji} ${s.label}</span>`;
+  }
+  return `<span style="background:var(--gray-100);color:var(--gray-600);font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;white-space:nowrap;">⚡ Direct</span>`;
+}
+
 // ====================================================================
 // LEADS WON view — shows converted leads with stats
 // ====================================================================
@@ -4971,7 +5038,7 @@ function renderLeadsWon() {
 
     <h3 style="margin:0 0 10px;font-size:16px;">🏆 All Wins ${wins.length ? `(${wins.length})` : ''}</h3>
     ${recentWins.length ? `<table style="width:100%;"><thead><tr>
-      <th>Student</th><th>Email</th><th>Phone</th><th>Class Date</th><th>Submitted</th><th>Course</th><th>Revenue</th><th></th>
+      <th>Student</th><th>Email</th><th>Phone</th><th>Class Date</th><th>Submitted</th><th>Course</th><th>Converted via</th><th>Revenue</th><th></th>
     </tr></thead><tbody>
       ${recentWins.map(r => {
         const d = r.data;
@@ -4983,6 +5050,7 @@ function renderLeadsWon() {
           <td>${escapeHtml(fmtDate(d.date))}<br><span class="small">${escapeHtml(d.time_label || '')}</span></td>
           <td><span class="small">${days}d ago</span></td>
           <td>${courseLabel(d.course_type)}</td>
+          <td>${winStageTag(d)}</td>
           <td><strong style="color:var(--green);">$${amountFor(r)}</strong></td>
           <td style="white-space:nowrap;">
             <button class="btn" style="padding:4px 8px;font-size:11px;" onclick="openEdit('${escapeHtml(r.key)}')">Edit</button>
