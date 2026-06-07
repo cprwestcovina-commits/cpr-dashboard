@@ -407,6 +407,21 @@ export default async function handler(req, res) {
   if (process.env.CRON_SECRET && req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }
+  // Safe self-test: confirms the function loads (incl. the recovery-token import) and reports
+  // env/flag readiness — WITHOUT processing any leads or sending anything.
+  if (req.query?.selftest) {
+    return res.status(200).json({
+      ok: true,
+      recovery_v2: RECOVERY_V2,
+      tokenLibLoaded: typeof signToken === 'function',
+      env: {
+        square_token: !!process.env.SQUARE_ACCESS_TOKEN,
+        square_env: process.env.SQUARE_ENV || null,
+        square_location: !!process.env.SQUARE_LOCATION_ID,
+        recovery_secret: !!process.env.RECOVERY_SECRET,
+      },
+    });
+  }
 
   // === Self-heal: ensure the customer-email scenarios are running (restart any that stopped/errored).
   // Always-on, free, every 2hr — covers the failure mode where a Make scenario crashes off. ===
