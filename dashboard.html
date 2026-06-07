@@ -5423,10 +5423,72 @@ function renderSourceConversionAnalytics() {
     <div style="display:flex;flex-wrap:wrap;gap:12px;">${cards}</div>`;
 }
 
+// ── Conversions by Recovery Stage ──────────────────────────────────
+// Attributes each recovered (confirmed) lead to the LAST recovery touch that was
+// sent before they paid — i.e. the message most likely to have brought them back.
+// Uses the per-touch flags already on every record (works retroactively).
+const RECOVERY_STAGES = [
+  // order = chronological; later entries win when multiple flags are set
+  { flag: 'nudge2_sent',       label: 'T+2hr Email',   channel: 'email', emoji: '📧', color: '#2563eb' },
+  { flag: 'nudge_t24hr_sent',  label: 'T+24hr Text',   channel: 'sms',   emoji: '💬', color: '#7c3aed' },
+  { flag: 'comeback30_sent',   label: 'Day-5 Email',   channel: 'email', emoji: '📧', color: '#0891b2' },
+  { flag: 'nudge_d5sms_sent',  label: 'Day-5 Text',    channel: 'sms',   emoji: '💬', color: '#9333ea' },
+  { flag: 'nudge_d7sms_sent',  label: 'Day-7 Text',    channel: 'sms',   emoji: '💬', color: '#c026d3' },
+];
+function lastRecoveryStage(d) {
+  let stage = null;
+  for (const s of RECOVERY_STAGES) { if (d[s.flag] === 'yes') stage = s; }
+  return stage; // null = no recovery touch was sent (direct / same-day)
+}
+function renderRecoveryStageAnalytics() {
+  const revPage = document.getElementById('page-revenue');
+  if (!revPage) return;
+  let host = document.getElementById('recoveryStageHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'recoveryStageHost';
+    host.className = 'card';
+    host.style.marginTop = '16px';
+    revPage.appendChild(host);
+  }
+  const tally = {}; RECOVERY_STAGES.forEach(s => tally[s.label] = { count:0, revenue:0, meta:s });
+  let directCount = 0, directRev = 0;
+  let emailWins = 0, smsWins = 0;
+  RECORDS.forEach(r => {
+    const d = r.data;
+    if (d.status !== 'confirmed' || d.source === 'historical_import') return;
+    const stage = lastRecoveryStage(d);
+    if (!stage) { directCount++; directRev += amountFor(r); return; }
+    const t = tally[stage.label]; t.count++; t.revenue += amountFor(r);
+    if (stage.channel === 'email') emailWins++; else smsWins++;
+  });
+  const recovered = emailWins + smsWins;
+  if (!recovered && !directCount) { host.innerHTML = ''; return; }
+  const cards = RECOVERY_STAGES.map(s => {
+    const t = tally[s.label];
+    const pct = recovered ? Math.round(100 * t.count / recovered) : 0;
+    return `<div style="flex:1;min-width:150px;background:#fff;border:2px solid ${s.color};border-radius:10px;padding:14px 16px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;"><strong style="color:${s.color};font-size:13px;">${s.emoji} ${s.label}</strong><span style="font-size:11px;color:var(--gray-500);">${pct}%</span></div>
+      <div style="font-size:26px;font-weight:800;color:${s.color};line-height:1;">${t.count}</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px;">recovered</div>
+      <div style="font-size:12px;color:var(--green);font-weight:600;">$${Math.round(t.revenue).toLocaleString()}</div>
+    </div>`;
+  }).join('');
+  host.innerHTML = `<h2 style="margin-bottom:6px;">🎯 Conversions by Recovery Stage</h2>
+    <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">Of leads who came back and paid, which was the <strong>last touch</strong> that reached them first — and whether 📧 email or 💬 text closed it. (Live leads only; same-day/direct payers excluded from the split.)</p>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+      <div style="flex:1;min-width:170px;background:#eff6ff;border:2px solid #2563eb;border-radius:10px;padding:14px 16px;"><div style="font-size:13px;font-weight:700;color:#2563eb;">📧 Email closed</div><div style="font-size:26px;font-weight:800;color:#2563eb;line-height:1.1;">${emailWins}</div><div style="font-size:11px;color:var(--gray-500);">${recovered?Math.round(100*emailWins/recovered):0}% of recovered</div></div>
+      <div style="flex:1;min-width:170px;background:#faf5ff;border:2px solid #7c3aed;border-radius:10px;padding:14px 16px;"><div style="font-size:13px;font-weight:700;color:#7c3aed;">💬 Text closed</div><div style="font-size:26px;font-weight:800;color:#7c3aed;line-height:1.1;">${smsWins}</div><div style="font-size:11px;color:var(--gray-500);">${recovered?Math.round(100*smsWins/recovered):0}% of recovered</div></div>
+      <div style="flex:1;min-width:170px;background:var(--gray-100);border:2px solid var(--gray-300);border-radius:10px;padding:14px 16px;"><div style="font-size:13px;font-weight:700;color:var(--gray-700);">⚡ Direct / same-day</div><div style="font-size:26px;font-weight:800;color:var(--gray-700);line-height:1.1;">${directCount}</div><div style="font-size:11px;color:var(--gray-500);">paid before any recovery touch</div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">${cards}</div>`;
+}
+
 const __origRenderRevenue = renderRevenue;
 renderRevenue = function() {
   __origRenderRevenue();
   renderSourceConversionAnalytics();
+  renderRecoveryStageAnalytics();
   renderTimeAnalytics();
 };
 

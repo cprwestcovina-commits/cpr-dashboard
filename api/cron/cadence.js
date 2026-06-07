@@ -50,6 +50,24 @@ function courseLabel(ct) {
   if (c === 'pals') return 'PALS';
   return 'BLS';
 }
+// Per-certification recovery promo codes (abandoned-checkout, $30 off) — personable, cert-tailored.
+// Customers see a code that matches the class they were booking.
+function recoveryCode(ct) {
+  const c = (ct || '').toLowerCase().replace(/^aha_/, '');
+  if (c === 'heartsaver' || c === 'hs') return 'SAVERBACK30';
+  if (c === 'acls') return 'ACLSBACK30';
+  if (c === 'pals') return 'PALSBACK30';
+  return 'BLSBACK30';
+}
+// Booking page per cert, tagged so we know which recovery touch drove the click.
+function recoveryBookUrl(ct, touch) {
+  const c = (ct || '').toLowerCase().replace(/^aha_/, '');
+  const base = (c === 'heartsaver' || c === 'hs') ? 'https://cpr-dashboard-cprwc.vercel.app/heartsaver.html'
+    : c === 'acls' ? 'https://cpr-dashboard-cprwc.vercel.app/acls.html'
+    : c === 'pals' ? 'https://cpr-dashboard-cprwc.vercel.app/pals.html'
+    : 'https://cprwestcovina-commits.github.io/bls-booking/bls-booking.html';
+  return `${base}?src=recovery&rc=${touch}`;
+}
 // Build all the renewal-email fields in JS so the Make template stays a dumb fill-in-the-blank
 // (no switch/if formulas in Make → nothing to corrupt). `days` is the touch milestone.
 function renewalEmailFields(courseType, days, firstName) {
@@ -362,7 +380,8 @@ export default async function handler(req, res) {
 
     // Day 5 email — fire webhook + PATCH flag directly (don't rely on Make scenario to flag)
     if (age >= 120 && age <= 720 && d.comeback30_sent !== 'yes') {
-      if (await fireWebhook(D5_EMAIL_HOOK, payload)) {
+      const d5Payload = { ...payload, promo_code: recoveryCode(d.course_type), book_url: recoveryBookUrl(d.course_type, 'd5email') };
+      if (await fireWebhook(D5_EMAIL_HOOK, d5Payload)) {
         await patchFlag(lead.key, d, { comeback30_sent: 'yes', lead_stage: 'email2' });
         summary.d5email++;
       }
@@ -370,7 +389,7 @@ export default async function handler(req, res) {
 
     // Day 5 SMS
     if (age >= 120 && age <= 720 && d.nudge_d5sms_sent !== 'yes') {
-      const msg = `Hey ${payload.first_name}, Caroline. I held a seat for ${courseLabel(payload.course_type)} on ${payload.date_formatted}. Use code COMEBACK30 at checkout for $30 off — expires soon. Reply STOP to opt out.`;
+      const msg = `Hey ${payload.first_name}, Caroline. I held a seat for ${courseLabel(payload.course_type)} on ${payload.date_formatted}. Use code ${recoveryCode(payload.course_type)} at checkout for $30 off — expires soon. Reply STOP to opt out.`;
       const r = await sendSmsIfAllowed(payload, msg);
       if (r === 'sent') {
         await patchFlag(lead.key, d, { nudge_d5sms_sent: 'yes' });
