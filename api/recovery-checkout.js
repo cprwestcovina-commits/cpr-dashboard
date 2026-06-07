@@ -93,7 +93,7 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         recovery_order_id: data.payment_link.order_id || '',
         recovery_link_id: data.payment_link.id || '',
-        recovery_tier: v.payload.t || '',
+        recovery_tier: v.payload.ti || v.payload.t || '',
         recovery_channel: v.payload.ch || '',
         recovery_amount_cents: String(discount),
       }),

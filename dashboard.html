@@ -5484,11 +5484,60 @@ function renderRecoveryStageAnalytics() {
     <div style="display:flex;flex-wrap:wrap;gap:12px;">${cards}</div>`;
 }
 
+// ── Recovery Wins (cadence v2) ─────────────────────────────────────
+// Reads the v2 recovery fields (recovery_tier / recovery_channel / recovery_amount_cents /
+// recovery_redeemed) to show which discount tier + channel actually closed each recovered lead.
+const RCV_TIER_FLAGS = ['rcv_t1_email','rcv_t1_sms','rcv_t2_email','rcv_t2_sms','rcv_t3_email','rcv_t3_sms','rcv_t4_email','rcv_t4_sms'];
+const RCV_TIER_META = { t1:{label:'Tier 1 (24h)',color:'#2563eb'}, t2:{label:'Tier 2 (48h)',color:'#0891b2'}, t3:{label:'Tier 3 (96h)',color:'#7c3aed'}, t4:{label:'Tier 4 — Final',color:'#c026d3'} };
+function renderRecoveryWinsV2() {
+  const revPage = document.getElementById('page-revenue');
+  if (!revPage) return;
+  let host = document.getElementById('recoveryWinsHost');
+  if (!host) { host = document.createElement('div'); host.id='recoveryWinsHost'; host.className='card'; host.style.marginTop='16px'; revPage.appendChild(host); }
+  let issued = 0;
+  const tiers = {}; Object.keys(RCV_TIER_META).forEach(k => tiers[k] = { won:0, revenue:0, discount:0 });
+  let emailWins=0, smsWins=0, totalWon=0, totalRevenue=0, totalDiscount=0;
+  RECORDS.forEach(r => {
+    const d = r.data; if (d.source === 'historical_import') return;
+    const wasIssued = RCV_TIER_FLAGS.some(f => d[f] === 'yes');
+    if (wasIssued) issued++;
+    const won = d.status === 'confirmed' && (d.recovery_redeemed === 'yes' || !!d.recovery_amount_cents);
+    if (!won) return;
+    totalWon++; totalRevenue += amountFor(r);
+    const disc = Number(d.recovery_amount_cents || 0) / 100; totalDiscount += disc;
+    const tk = (d.recovery_tier || '').replace(/[^t1-4]/g,'') || (d.recovery_tier||'');
+    if (tiers[d.recovery_tier]) { tiers[d.recovery_tier].won++; tiers[d.recovery_tier].revenue += amountFor(r); tiers[d.recovery_tier].discount += disc; }
+    if (d.recovery_channel === 'sms') smsWins++; else emailWins++;
+  });
+  if (!issued && !totalWon) { host.innerHTML = `<h2 style="margin-bottom:6px;">🎟️ Recovery Wins</h2><p style="color:var(--gray-500);font-size:13px;">No recovery-link conversions yet. This fills in once the new discount cadence is live.</p>`; return; }
+  const rate = issued ? Math.round(100*totalWon/issued) : 0;
+  const tierCards = Object.keys(RCV_TIER_META).map(k => {
+    const m=RCV_TIER_META[k], t=tiers[k];
+    return `<div style="flex:1;min-width:150px;background:#fff;border:2px solid ${m.color};border-radius:10px;padding:14px 16px;">
+      <div style="font-size:13px;font-weight:700;color:${m.color};margin-bottom:4px;">${m.label}</div>
+      <div style="font-size:26px;font-weight:800;color:${m.color};line-height:1;">${t.won}</div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:6px;">recovered</div>
+      <div style="font-size:12px;color:var(--green);font-weight:600;">$${Math.round(t.revenue).toLocaleString()} in</div>
+      <div style="font-size:11px;color:var(--gray-500);">$${Math.round(t.discount).toLocaleString()} given</div>
+    </div>`;
+  }).join('');
+  host.innerHTML = `<h2 style="margin-bottom:6px;">🎟️ Recovery Wins</h2>
+    <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">Leads who came back and paid through a personalized discount link — which tier + channel closed them, and the discount given vs revenue recovered.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+      <div style="flex:1;min-width:140px;background:#ecfdf3;border:2px solid #0aa05a;border-radius:10px;padding:14px 16px;"><div style="font-size:12px;font-weight:700;color:#067647;">Recovered</div><div style="font-size:26px;font-weight:800;color:#067647;line-height:1.1;">${totalWon}</div><div style="font-size:11px;color:var(--gray-500);">${rate}% of ${issued} issued</div></div>
+      <div style="flex:1;min-width:140px;background:#eff6ff;border:2px solid #2563eb;border-radius:10px;padding:14px 16px;"><div style="font-size:12px;font-weight:700;color:#2563eb;">📧 Email closed</div><div style="font-size:26px;font-weight:800;color:#2563eb;line-height:1.1;">${emailWins}</div></div>
+      <div style="flex:1;min-width:140px;background:#faf5ff;border:2px solid #7c3aed;border-radius:10px;padding:14px 16px;"><div style="font-size:12px;font-weight:700;color:#7c3aed;">💬 Text closed</div><div style="font-size:26px;font-weight:800;color:#7c3aed;line-height:1.1;">${smsWins}</div></div>
+      <div style="flex:1;min-width:140px;background:var(--gray-100);border:2px solid var(--gray-300);border-radius:10px;padding:14px 16px;"><div style="font-size:12px;font-weight:700;color:var(--gray-700);">$ recovered</div><div style="font-size:22px;font-weight:800;color:var(--gray-800);line-height:1.2;">$${Math.round(totalRevenue).toLocaleString()}</div><div style="font-size:11px;color:var(--gray-500);">$${Math.round(totalDiscount).toLocaleString()} discounts given</div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:12px;">${tierCards}</div>`;
+}
+
 const __origRenderRevenue = renderRevenue;
 renderRevenue = function() {
   __origRenderRevenue();
   renderSourceConversionAnalytics();
   renderRecoveryStageAnalytics();
+  renderRecoveryWinsV2();
   renderTimeAnalytics();
 };
 

@@ -479,7 +479,7 @@ export default async function handler(req, res) {
 
         // EMAIL
         if (RCV_EMAIL_HOOK && d[flagE] !== 'yes') {
-          const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ch: 'email', x: expiry });
+          const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ti: tier.key, ch: 'email', x: expiry });
           const url = `${recoveryWidget(d.course_type)}?rcv=${tok}&src=recovery&utm_content=${flagE}`;
           if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryEmailFields(d, tier, amount, url) })) {
             await patchFlag(lead.key, d, { [flagE]: 'yes', recovery_tier: tier.key });
@@ -491,7 +491,7 @@ export default async function handler(req, res) {
         if (d[flagS] !== 'yes') {
           const hr = ptHourNow();
           if (hr >= BIZ_START && hr < BIZ_END) {
-            const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ch: 'sms', x: expiry });
+            const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ti: tier.key, ch: 'sms', x: expiry });
             // Store token so the short SMS redirect (/api/r?k=) can resolve it; keep local copy fresh.
             await patchFlag(lead.key, d, { recovery_token: tok }); d.recovery_token = tok;
             const shortUrl = `${SHORT_BASE}/api/r?k=${encodeURIComponent(lead.key)}`;
