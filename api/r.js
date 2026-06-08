@@ -1,10 +1,7 @@
-// Short SMS redirect: /api/r?k=<leadKey> → 302 to the lead's course booking widget with their
-// signed recovery token attached. Keeps recovery texts short (one segment) instead of pasting a
-// ~200-char token inline. The token itself is stored on the lead record by the cron.
-const MAKE_TOKEN = '4317021d-3786-4640-8265-34e63c0aaa2e';
-const DS_URL = 'https://us2.make.com/api/v2/data-stores/100809/data';
-const TEAM_ID = '2313459';
-
+// Short SMS redirect: /api/r?t=<signed token> → 302 to the lead's course booking widget with the
+// token attached. The token is carried IN the link (no datastore lookup) because Make's GET-by-key
+// is unreliable for synthetic keys. The token is already URL-safe (base64url + '.'), and the
+// checkout endpoint verifies its signature — this redirect just routes to the right widget.
 function widgetFor(ct) {
   const c = (ct || '').toLowerCase().replace(/^aha_/, '');
   if (c === 'heartsaver' || c === 'hs') return 'https://cpr-dashboard-cprwc.vercel.app/heartsaver.html';
@@ -14,19 +11,14 @@ function widgetFor(ct) {
 }
 
 export default async function handler(req, res) {
-  const key = (req.query?.k || '').trim();
   const fallback = 'https://cprwestcovina.com';
-  if (!key) return res.redirect(302, fallback);
+  const t = (req.query?.t || '').trim();
+  if (!t) return res.redirect(302, fallback);
+  let course = 'bls';
   try {
-    const r = await fetch(`${DS_URL}/${encodeURIComponent(key)}?teamId=${TEAM_ID}`, {
-      headers: { 'Authorization': `Token ${MAKE_TOKEN}` },
-    });
-    const j = await r.json();
-    const d = (j && (j.record?.data || j.data)) || null;
-    if (!d || !d.recovery_token) return res.redirect(302, fallback);
-    const url = `${widgetFor(d.course_type)}?rcv=${d.recovery_token}&src=recovery&utm_content=sms`;
-    return res.redirect(302, url);
-  } catch (e) {
-    return res.redirect(302, fallback);
-  }
+    const payloadB64 = t.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8'));
+    if (payload.c) course = payload.c;
+  } catch (e) { /* malformed token → still route to default widget */ }
+  return res.redirect(302, `${widgetFor(course)}?rcv=${encodeURIComponent(t)}&src=recovery&utm_content=sms`);
 }

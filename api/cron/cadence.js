@@ -507,9 +507,8 @@ export default async function handler(req, res) {
           const hr = ptHourNow();
           if (hr >= BIZ_START && hr < BIZ_END) {
             const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ti: tier.key, ch: 'sms', x: expiry });
-            // Store token so the short SMS redirect (/api/r?k=) can resolve it; keep local copy fresh.
-            await patchFlag(lead.key, d, { recovery_token: tok }); d.recovery_token = tok;
-            const shortUrl = `${SHORT_BASE}/api/r?k=${encodeURIComponent(lead.key)}`;
+            // Token rides in the short link (/api/r?t=) — no datastore lookup (GET-by-key is unreliable).
+            const shortUrl = `${SHORT_BASE}/api/r?t=${tok}`;
             const r = await sendSmsIfAllowed(payload, recoverySms(d, tier, amount, shortUrl));
             if (r === 'sent') {
               await patchFlag(lead.key, d, { [flagS]: 'yes', recovery_tier: tier.key, recovery_channel: 'sms' });
