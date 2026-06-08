@@ -363,6 +363,28 @@ async function cleanupRecoveryLinks(all, summary) {
   }
 }
 
+// Self-monitor the recovery funnel each run so a broken link surfaces in the Logs feed automatically.
+async function recoveryMonitor(all, summary, logEvent) {
+  // Active probe: the SMS short-link MUST redirect to a course widget, never the homepage fallback.
+  try {
+    const tok = signToken({ k: '__monitor__', c: 'bls', a: 1500, t: '$15 off', ti: 't1', ch: 'sms', x: Date.now() + 3600000 });
+    const r = await fetch(`${SHORT_BASE}/api/r?t=${tok}`, { redirect: 'manual' });
+    const loc = r.headers.get('location') || '';
+    if (loc.includes('rcv=') && !/cprwestcovina\.com\/?$/.test(loc)) {
+      summary.recoveryLinkOk = true;
+    } else {
+      summary.recoveryLinkOk = false;
+      logEvent('error', 'monitor', `🚨 recovery SMS link BROKEN — /api/r redirects to "${loc.slice(0, 70)}"`);
+    }
+  } catch (e) { summary.recoveryLinkOk = false; logEvent('error', 'monitor', 'recovery link check failed: ' + e.message); }
+  // Passive anomaly: lots of links sent but zero click-throughs → likely a delivery/link problem.
+  const flags = ['rcv_t1_email','rcv_t1_sms','rcv_t2_email','rcv_t2_sms','rcv_t3_email','rcv_t3_sms','rcv_t4_email','rcv_t4_sms'];
+  const sent = all.filter(r => flags.some(f => r.data?.[f] === 'yes')).length;
+  const clicked = all.filter(r => r.data?.recovery_order_id).length;
+  summary.rcvSent = sent; summary.rcvClicked = clicked;
+  if (sent >= 30 && clicked === 0) logEvent('warning', 'monitor', `${sent} recovery links sent but 0 click-throughs — worth verifying links work`);
+}
+
 // Upsert a record by key via delete-then-create. The datastore enforces a STRICT schema that
 // rejects PATCH with non-schema fields ("Unexpected parameter"), but POST (add) tolerates extra
 // fields. So we delete any existing record and re-add it fresh.
@@ -467,6 +489,7 @@ export default async function handler(req, res) {
   // — so customers get confirmed within ~2hr of paying, even when nobody has the dashboard open.
   try { await reconcileSquarePayments(all, summary); } catch (e) { summary.errors.push('reconcile: ' + e.message); }
   if (RECOVERY_V2) { try { await cleanupRecoveryLinks(all, summary); } catch (e) { summary.errors.push('cleanup: ' + e.message); } }
+  if (RECOVERY_V2) { try { await recoveryMonitor(all, summary, logEvent); } catch (e) { summary.errors.push('monitor: ' + e.message); } }
 
   const leads = all.filter(r => r.data?.status === 'pending');
   const confirmedHistorical = all.filter(r => r.data?.status === 'confirmed' && r.data?.source === 'historical_import' && r.data?.past_due_email_sent !== 'yes');
@@ -769,6 +792,8 @@ export default async function handler(req, res) {
     type: 'watchdog',
     ts: new Date().toISOString(),
     renewalDate: doRenewalToday ? todayUTC : lastRenewalDate,  // marks the day renewals last fired
+    recoveryLinkOk: summary.recoveryLinkOk,   // false = SMS recovery link is broken (auto-probed each run)
+    rcvSent: summary.rcvSent, rcvClicked: summary.rcvClicked,
     totalRecords: all.length,
     confirmedAnchors: confirmedAll.length,
     activeWindow,
