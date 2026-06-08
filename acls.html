@@ -600,6 +600,18 @@ const CONFIG = {
   bookedSeats: {}
 };
 
+// Persist ad-tracking params on EVERY page load (not just at checkout) so a visitor who arrives
+// from an ad, leaves, and returns later still attributes to that ad. 90-day window.
+(function persistAdParamsOnLoad(){
+  try {
+    const p = new URLSearchParams(location.search);
+    ['gclid','utm_source','utm_campaign','utm_medium','utm_content','utm_term'].forEach(k => {
+      const v = p.get(k);
+      if (v) localStorage.setItem('cprwc_t_' + k, JSON.stringify({ v: v, t: Date.now() }));
+    });
+  } catch(_) {}
+})();
+
 let selectedDate = null;
 let selectedTime = null;
 let dateOffset = 0;
@@ -836,9 +848,11 @@ function initiatePayment() {
 
   // Ad-tracking params — read URL on first visit, cache in sessionStorage
   const __urlParams = new URLSearchParams(location.search);
+  const __TRACK_TTL = 90 * 86400000; // persist ad params 90 days so a return visit still attributes to the ad
   const __getTrack = (key) => {
     const v = __urlParams.get(key);
-    if (v) { try { sessionStorage.setItem('track_' + key, v); } catch(_) {} return v; }
+    if (v) { try { localStorage.setItem('cprwc_t_' + key, JSON.stringify({ v: v, t: Date.now() })); } catch(_) {} return v; }
+    try { const s = JSON.parse(localStorage.getItem('cprwc_t_' + key) || 'null'); if (s && Date.now() - s.t < __TRACK_TTL) return s.v; } catch(_) {}
     try { return sessionStorage.getItem('track_' + key) || ''; } catch(_) { return ''; }
   };
   const trackGclid       = __getTrack('gclid');
@@ -870,7 +884,7 @@ function initiatePayment() {
     square_url: CONFIG.squarePaymentUrl,
     location: '100 Barranca St #255-B, West Covina, CA 91791',
     submitted_at: new Date().toISOString(),
-    source: new URLSearchParams(location.search).get('src') || 'paid_ad',
+    source: (trackGclid ? 'paid_ad' : (new URLSearchParams(location.search).get('src') || 'paid_ad')),
     sms_consent: (document.getElementById('smsConsent') && document.getElementById('smsConsent').checked) ? 'yes' : 'no',
     gclid: trackGclid,
     utm_source: trackUtmSource,
@@ -920,7 +934,7 @@ function initiatePayment() {
       status: 'pending',
       course_type: 'acls',
       square_payment_id: '',
-      source: new URLSearchParams(location.search).get('src') || 'paid_ad',
+      source: (trackGclid ? 'paid_ad' : (new URLSearchParams(location.search).get('src') || 'paid_ad')),
     sms_consent: (document.getElementById('smsConsent') && document.getElementById('smsConsent').checked) ? 'yes' : 'no',
       gclid: trackGclid,
       utm_source: trackUtmSource,
