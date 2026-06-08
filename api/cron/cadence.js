@@ -372,6 +372,7 @@ async function recoveryMonitor(all, summary, logEvent) {
     const loc = r.headers.get('location') || '';
     if (loc.includes('rcv=') && !/cprwestcovina\.com\/?$/.test(loc)) {
       summary.recoveryLinkOk = true;
+      logEvent('info', 'monitor', 'recovery link healthy ✓ (SMS short-link → widget)');
     } else {
       summary.recoveryLinkOk = false;
       logEvent('error', 'monitor', `🚨 recovery SMS link BROKEN — /api/r redirects to "${loc.slice(0, 70)}"`);
