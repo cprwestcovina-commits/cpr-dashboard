@@ -1603,6 +1603,23 @@
 
     <!-- LOGS & DEBUG TAB -->
     <div class="page" id="page-logs">
+      <!-- Live activity feed (terminal style) -->
+      <div style="background:#0d1117;border:1px solid #1f2733;border-radius:14px;overflow:hidden;margin-bottom:18px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid #1f2733;">
+          <select id="feedLevel" onchange="renderActivityFeed()" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:6px 10px;font-size:13px;font-family:inherit;">
+            <option value="all">All levels</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="error">Error</option>
+          </select>
+          <input id="feedSearch" oninput="renderActivityFeed()" placeholder="Search…" style="flex:1;min-width:160px;background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:7px 12px;font-size:13px;font-family:inherit;">
+          <span style="display:flex;align-items:center;gap:6px;color:#3fb950;font-size:13px;"><span id="feedLiveDot" style="width:8px;height:8px;border-radius:50%;background:#3fb950;display:inline-block;"></span>Live <span id="feedCount" style="color:#8b949e;">0 lines</span></span>
+          <button onclick="window.__cronLog=[];renderActivityFeed()" style="background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:inherit;">Clear</button>
+          <label style="display:flex;align-items:center;gap:5px;color:#8b949e;font-size:13px;cursor:pointer;"><input type="checkbox" id="feedAutoscroll" checked> Auto-scroll</label>
+          <label style="display:flex;align-items:center;gap:5px;color:#8b949e;font-size:13px;cursor:pointer;"><input type="checkbox" id="feedLivePoll" checked onchange="toggleFeedPoll()"> Auto-refresh</label>
+        </div>
+        <div id="activityFeed" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.7;color:#c9d1d9;padding:14px 16px;height:420px;overflow-y:auto;white-space:pre-wrap;"></div>
+      </div>
       <div class="stats" id="logsStats"></div>
       <div class="card">
         <h2>System Status</h2>
@@ -2030,6 +2047,8 @@ async function loadAll() {
     window.__campaignRec = campRec ? campRec.data : null;
     const tplRec = all.find(r => r.key === '__templates__' || r.data?.status === 'templates');
     window.__templatesRec = tplRec ? tplRec.data : null;
+    const clRec = all.find(r => r.key === '__cronlog__' || r.data?.status === 'cronlog');
+    try { window.__cronLog = clRec ? (JSON.parse(clRec.data.landing_url || '{}').entries || []) : []; } catch (_) { window.__cronLog = []; }
     RECORDS = all.filter(r => r.data && r.data.email && r.data.status !== 'anchor');
     render();
     document.getElementById('lastUpdated').textContent = 'Last updated ' + new Date().toLocaleTimeString() + ' (' + RECORDS.length + ' records)';
@@ -3230,7 +3249,37 @@ const SCENARIO_NAMES = {
   5127186: 'Reschedule Notification',
 };
 
+// ── Live activity feed (terminal) — reads the cron event log (window.__cronLog) ──
+function renderActivityFeed() {
+  const host = document.getElementById('activityFeed'); if (!host) return;
+  const levelF = document.getElementById('feedLevel')?.value || 'all';
+  const q = (document.getElementById('feedSearch')?.value || '').toLowerCase();
+  let entries = (window.__cronLog || []).slice().sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+  entries = entries.filter(e => (levelF === 'all' || e.level === levelF) && (!q || ((e.msg || '') + ' ' + (e.src || '')).toLowerCase().includes(q)));
+  const LV = { info: '#3fb950', warning: '#d29922', error: '#f85149' };
+  const fmtTime = ts => { try { return new Date(ts).toLocaleTimeString('en-US', { hour12: false, timeZone: LA_TZ }); } catch (_) { return '--:--:--'; } };
+  const cnt = document.getElementById('feedCount'); if (cnt) cnt.textContent = entries.length + ' lines';
+  if (!entries.length) { host.innerHTML = '<span style="color:#6e7681;">No activity yet. Cron + automation events appear here as they fire (every ~2 hrs).</span>'; return; }
+  host.innerHTML = entries.map(e => {
+    const lv = LV[e.level] || '#8b949e';
+    return `<div><span style="color:#6e7681;">${fmtTime(e.ts)}</span> <span style="color:#58a6ff;">${escapeHtml((e.src || '').padEnd(9))}</span> <span style="color:${lv};font-weight:700;">${escapeHtml((e.level || '').toUpperCase().padEnd(7))}</span> <span>${escapeHtml(e.msg || '')}</span></div>`;
+  }).join('');
+  if (document.getElementById('feedAutoscroll')?.checked) host.scrollTop = host.scrollHeight;
+}
+let __feedPoll = null;
+function toggleFeedPoll() {
+  const on = document.getElementById('feedLivePoll')?.checked;
+  if (__feedPoll) { clearInterval(__feedPoll); __feedPoll = null; }
+  const dot = document.getElementById('feedLiveDot');
+  if (on) {
+    __feedPoll = setInterval(async () => { if (currentTab === 'logs') { await loadAll(); renderActivityFeed(); } }, 25000);
+    if (dot) dot.style.background = '#3fb950';
+  } else if (dot) { dot.style.background = '#6e7681'; }
+}
+
 async function renderLogs() {
+  renderActivityFeed();
+  toggleFeedPoll();
   // System status
   const t = today();
   const recordsTotal = RECORDS.length;

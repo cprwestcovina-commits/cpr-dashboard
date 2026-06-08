@@ -337,6 +337,7 @@ async function reconcileSquarePayments(all, summary) {
     if (!ok) { summary.errors.push(`reconcile patch failed ${u.email}`); continue; }
     r.data = { ...d, status: 'confirmed', square_payment_id: u.id, confirm_email_sent: 'yes', ...extra };
     if (isRecovery) summary.rcvRedeemed = (summary.rcvRedeemed || 0) + 1;
+    summary.events.push({ ts: new Date().toISOString(), level: 'info', src: 'payment', msg: `confirmed ${u.email || d.email}${isRecovery ? ' 🎟️ via recovery link' : ''}` });
     const idx = pending.indexOf(r); if (idx >= 0) pending.splice(idx, 1);
     await fireWebhook(CONFIRM_HOOK, { ...r.data, time_label_24: to24(r.data.time_label), time_end_24: to24(r.data.time_end) });
     summary.reconciled++;
@@ -432,7 +433,10 @@ export default async function handler(req, res) {
     confirmation: 5137480,   // Booking/Manual Confirmation
   };
   const selfHeal = {};
-  for (const [k, sid] of Object.entries(SELF_HEAL_SCENARIOS)) selfHeal[k] = await ensureScenarioActive(sid);
+  for (const [k, sid] of Object.entries(SELF_HEAL_SCENARIOS)) {
+    selfHeal[k] = await ensureScenarioActive(sid);
+    if (selfHeal[k] && selfHeal[k] !== 'ok') logEvent('warning', 'self-heal', `${k} scenario was ${selfHeal[k]} → restarted`);
+  }
   selfHeal.renewalEmailScenario = selfHeal.renewalEmail;  // backcompat for dashboard
 
   // Fetch ALL records (pending + confirmed) — pagination via offset
@@ -453,7 +457,10 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ ok: false, error: 'datastore fetch failed: ' + e.message });
   }
-  const summary = { t2hr: 0, t24hr: 0, d5email: 0, d5sms: 0, d7sms: 0, renewal: 0, reconciled: 0, errors: [] };
+  const summary = { t2hr: 0, t24hr: 0, d5email: 0, d5sms: 0, d7sms: 0, renewal: 0, reconciled: 0, errors: [], events: [] };
+  // Timestamped event logger → feeds the dashboard's live Logs feed.
+  const logEvent = (level, src, msg) => { summary.events.push({ ts: new Date().toISOString(), level, src, msg }); };
+  logEvent('info', 'cron', `run started · ${all.length} records, ${all.filter(r => r.data?.status === 'pending').length} pending`);
 
   // === Server-side Square reconciliation ===
   // Match completed Square payments to pending leads and confirm them (fire confirmation + calendar)
@@ -499,7 +506,8 @@ export default async function handler(req, res) {
           if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryEmailFields(d, tier, amount, url) })) {
             await patchFlag(lead.key, d, { [flagE]: 'yes', recovery_tier: tier.key });
             summary.rcvEmail = (summary.rcvEmail || 0) + 1;
-          } else summary.errors.push(`rcv ${tier.key} email: ${payload.first_name}`);
+            logEvent('info', 'recovery', `${tier.key.toUpperCase()} email → ${payload.email} ($${Math.round(amount/100)} off ${courseLabel(d.course_type)})`);
+          } else { summary.errors.push(`rcv ${tier.key} email: ${payload.first_name}`); logEvent('error', 'recovery', `email FAILED → ${payload.email} (${tier.key})`); }
         }
 
         // SMS — consented + business hours (9 AM–7 PM PT). Outside hours → hold for next run.
@@ -513,9 +521,11 @@ export default async function handler(req, res) {
             if (r === 'sent') {
               await patchFlag(lead.key, d, { [flagS]: 'yes', recovery_tier: tier.key, recovery_channel: 'sms' });
               summary.rcvSms = (summary.rcvSms || 0) + 1;
+              logEvent('info', 'recovery', `${tier.key.toUpperCase()} text → ${payload.phone || payload.email} ($${Math.round(amount/100)} off)`);
             } else if (r === 'optout') {
               await patchFlag(lead.key, d, { [flagS]: 'yes' });
-            } else summary.errors.push(`rcv ${tier.key} sms: ${payload.first_name} (send failed)`);
+              logEvent('warning', 'recovery', `text skipped (opted out) → ${payload.email}`);
+            } else { summary.errors.push(`rcv ${tier.key} sms: ${payload.first_name} (send failed)`); logEvent('error', 'recovery', `text FAILED → ${payload.email} (${tier.key})`); }
           }
         }
       }
@@ -716,7 +726,7 @@ export default async function handler(req, res) {
     for (const r of all) {
       const e = (r.data?.email || '').toLowerCase();
       if (!e || seen.has(e)) continue;
-      if (r.data.status === 'campaign' || r.data.status === 'watchdog') continue;
+      if (r.data.status === 'campaign' || r.data.status === 'watchdog' || r.data.status === 'cronlog') continue;
       seen.add(e);
       if (sentEmails.has(e) || r.data.email_optout === 'yes') continue;
       recipients.push(r);
@@ -786,6 +796,20 @@ export default async function handler(req, res) {
       status: 'watchdog',
       submitted_at: health.ts,
       landing_url: JSON.stringify(health),
+    });
+  } catch (e) {}
+
+  // Run summary + any errors → event log, then persist a rolling event log for the dashboard feed.
+  (summary.errors || []).forEach(e => summary.events.push({ ts: health.ts, level: 'error', src: 'cron', msg: e }));
+  logEvent('info', 'cron', `run done · ${summary.rcvEmail || 0} recovery emails, ${summary.rcvSms || 0} texts, ${summary.reconciled || 0} confirmed, ${(summary.errors || []).length} errors`);
+  try {
+    let prev = [];
+    try { prev = (JSON.parse(all.find(r => r.key === '__cronlog__')?.data?.landing_url || '{}').entries) || []; } catch (_) {}
+    const merged = [...prev, ...summary.events].slice(-400);
+    await upsertRecord('__cronlog__', {
+      status: 'cronlog',
+      submitted_at: health.ts,
+      landing_url: JSON.stringify({ entries: merged }),
     });
   } catch (e) {}
 
