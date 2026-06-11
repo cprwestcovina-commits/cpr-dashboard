@@ -5014,6 +5014,17 @@ function renderLeadsWonKanban(wins) {
   </div>`;
 }
 
+// Period filter for the Wins kanban (by submitted_at = when the lead clicked Pay).
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function getLeadsWonPeriod() {
+  try { return JSON.parse(localStorage.getItem('leadsWonPeriod') || 'null') || { year: 'all', month: 'all' }; } catch (_) { return { year: 'all', month: 'all' }; }
+}
+function setLeadsWonPeriod(field, val) {
+  const p = getLeadsWonPeriod(); p[field] = val;
+  localStorage.setItem('leadsWonPeriod', JSON.stringify(p));
+  renderLeads();
+}
+
 // ====================================================================
 // LEADS WON view — shows converted leads with stats
 // ====================================================================
@@ -5130,9 +5141,36 @@ function renderLeadsWon() {
       </tbody>
     </table>` : ''}
 
-    <h3 style="margin:0 0 4px;font-size:16px;">🏆 All Wins ${wins.length ? `(${wins.length})` : ''}</h3>
-    <p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">Each win sits in the touch that closed it — ⚡ Direct (paid before any recovery touch), the recovery tiers (24h/48h/96h/Final), or 📧 Recovery (older cadence).</p>
-    ${recentWins.length ? renderLeadsWonKanban(recentWins) : '<div class="empty">No wins yet. Come on, sell some classes 💪</div>'}
+    ${(() => {
+      const period = getLeadsWonPeriod();
+      const wonYears = [...new Set(wins.map(r => (r.data.submitted_at || '').slice(0,4)).filter(Boolean))].sort().reverse();
+      const filtered = recentWins.filter(r => {
+        const sa = r.data.submitted_at || ''; const y = sa.slice(0,4), m = sa.slice(5,7);
+        return (period.year === 'all' || y === period.year) && (period.month === 'all' || m === period.month);
+      });
+      const fRev = filtered.reduce((s, r) => s + amountFor(r), 0);
+      const periodLabel = period.month === 'all' && period.year === 'all' ? 'All time'
+        : `${period.month !== 'all' ? MONTH_NAMES[parseInt(period.month) - 1] + ' ' : ''}${period.year !== 'all' ? period.year : ''}`.trim();
+      const selStyle = 'background:#fff;border:1px solid var(--gray-300);border-radius:8px;padding:6px 10px;font-size:13px;font-family:inherit;cursor:pointer;';
+      return `
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 6px;">
+        <h3 style="margin:0;font-size:16px;">🏆 Wins — ${escapeHtml(periodLabel)}</h3>
+        <span style="font-size:13px;color:var(--green);font-weight:700;">${filtered.length} · $${Math.round(fRev).toLocaleString()}</span>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+          <span style="font-size:12px;color:var(--gray-500);">Show:</span>
+          <select onchange="setLeadsWonPeriod('month', this.value)" style="${selStyle}">
+            <option value="all" ${period.month === 'all' ? 'selected' : ''}>All months</option>
+            ${MONTH_NAMES.map((mn, i) => { const v = String(i + 1).padStart(2, '0'); return `<option value="${v}" ${period.month === v ? 'selected' : ''}>${mn}</option>`; }).join('')}
+          </select>
+          <select onchange="setLeadsWonPeriod('year', this.value)" style="${selStyle}">
+            <option value="all" ${period.year === 'all' ? 'selected' : ''}>All years</option>
+            ${wonYears.map(y => `<option value="${y}" ${period.year === y ? 'selected' : ''}>${y}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">Each win sits in the touch that closed it — ⚡ Direct, recovery tiers (24h/48h/96h/Final), or 📧 Recovery. Dated by when they clicked Pay.</p>
+      ${filtered.length ? renderLeadsWonKanban(filtered) : '<div class="empty">No wins in this period.</div>'}`;
+    })()}
   `;
 
   // Hide the monthly loss section while in won view
