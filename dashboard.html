@@ -4448,7 +4448,10 @@ function findDuplicates() {
       const t2 = new Date(grp[i].data.submitted_at || 0).getTime();
       if (Math.abs(t2 - t1) < 10*60*1000) { suspect = true; break; }
     }
-    if (suspect) dups.push(grp);
+    // Only flag groups with 2+ CONFIRMED (paid) records — a real double-booking / possible
+    // double-charge. Abandoned pay-clicks and import clutter are ignored (they're harmless).
+    const confirmedCount = grp.filter(r => r.data.status === 'confirmed').length;
+    if (suspect && confirmedCount >= 2) dups.push(grp);
   });
   return dups;
 }
@@ -4457,13 +4460,15 @@ function renderDupBanner() {
   const existing = document.getElementById('dupBanner');
   if (existing) existing.remove();
   if (!dups.length) return;
+  if (sessionStorage.getItem('dupBannerDismissed') === '1') return;  // hidden until next load
   const total = dups.length;
   const banner = document.createElement('div');
   banner.id = 'dupBanner';
   banner.className = 'dup-banner' + (total >= 3 ? ' severe' : '');
-  banner.innerHTML = `⚠️ <strong>${total} duplicate booking group${total>1?'s':''} detected.</strong>
-    Same email + date submitted within 10 minutes of each other.
-    <button onclick="showDups()">Review</button>`;
+  banner.innerHTML = `⚠️ <strong>${total} double-booked (paid 2×).</strong>
+    Same person paid twice on the same day — worth checking for a refund.
+    <button onclick="showDups()">Review</button>
+    <button onclick="sessionStorage.setItem('dupBannerDismissed','1');document.getElementById('dupBanner')?.remove()" style="background:transparent;border:none;color:inherit;font-size:16px;cursor:pointer;margin-left:6px;" title="Dismiss">✕</button>`;
   // Always inject into the fixed banner slot at the top
   const slot = document.getElementById('bannerSlot');
   if (slot) slot.appendChild(banner);
