@@ -115,9 +115,9 @@ function recoverySms(d, tier, amount, shortUrl) {
   const course = courseLabel(d.course_type);
   const amt = `$${Math.round(amount / 100)}`;
   if (tier.final) {
-    return `${first}, last chance - ${amt} off your ${course} on ${d.date_formatted}, expires in 48 hrs. Best price we can do: ${shortUrl}  Reply STOP to opt out.`;
+    return `Hi ${first},\n\nLast chance - ${amt} off your ${course} on ${d.date_formatted}, expires in 48 hrs.\n\nBest price we can do:\n${shortUrl}\n\nReply STOP to opt out.`;
   }
-  return `Hi ${first}, Caroline from CPR West Covina - here's ${amt} off your ${course} on ${d.date_formatted}. Pick any date: ${shortUrl}  Reply STOP to opt out.`;
+  return `Hi ${first},\n\nCaroline from CPR West Covina - here's ${amt} off your ${course} on ${d.date_formatted}.\n\nPick any date:\n${shortUrl}\n\nReply STOP to opt out.`;
 }
 
 function ageHours(submittedAt) {
@@ -566,7 +566,7 @@ export default async function handler(req, res) {
 
     // T+24hr SMS — direct GHL
     if (age >= 24 && age <= 168 && d.nudge_t24hr_sent !== 'yes') {
-      const msg = `Hi ${payload.first_name}, Caroline from CPR West Covina. Your spot for ${courseLabel(payload.course_type)} on ${payload.date_formatted} is still open. Want me to lock it in? Reply YES or call (626) 605-2067. STOP to opt out.`;
+      const msg = `Hi ${payload.first_name},\n\nCaroline from CPR West Covina. Your spot for ${courseLabel(payload.course_type)} on ${payload.date_formatted} is still open.\n\nReply YES to lock it in, or call (626) 605-2067.\n\nReply STOP to opt out.`;
       const r = await sendSmsIfAllowed(payload, msg);
       if (r === 'sent') {
         await patchFlag(lead.key, d, { nudge_t24hr_sent: 'yes', lead_stage: 'text2' });
@@ -589,7 +589,7 @@ export default async function handler(req, res) {
 
     // Day 5 SMS
     if (age >= 120 && age <= 720 && d.nudge_d5sms_sent !== 'yes') {
-      const msg = `Hey ${payload.first_name}, Caroline. I held a seat for ${courseLabel(payload.course_type)} on ${payload.date_formatted}. Use code ${recoveryCode(payload.course_type)} at checkout for $30 off — expires soon. Reply STOP to opt out.`;
+      const msg = `Hi ${payload.first_name},\n\nCaroline here. I held a seat for ${courseLabel(payload.course_type)} on ${payload.date_formatted}.\n\nUse code ${recoveryCode(payload.course_type)} at checkout for $30 off - expires soon.\n\nReply STOP to opt out.`;
       const r = await sendSmsIfAllowed(payload, msg);
       if (r === 'sent') {
         await patchFlag(lead.key, d, { nudge_d5sms_sent: 'yes' });
@@ -602,7 +602,7 @@ export default async function handler(req, res) {
     // Day 7 ACLS/PALS SMS
     if (isAclsPals && age >= 156 && age <= 180 && d.nudge_d7sms_sent !== 'yes') {
       const code = /pals/i.test(d.course_type) ? 'PALS25' : 'ACLS25';
-      const msg = `Hi ${payload.first_name}, Caroline. Final reminder for ${courseLabel(payload.course_type)} on ${payload.date_formatted}. Use code ${code} for $25 off. Call (626) 605-2067 to confirm. STOP to opt out.`;
+      const msg = `Hi ${payload.first_name},\n\nCaroline. Final reminder for ${courseLabel(payload.course_type)} on ${payload.date_formatted}.\n\nUse code ${code} for $25 off. Call (626) 605-2067 to confirm.\n\nReply STOP to opt out.`;
       const r = await sendSmsIfAllowed(payload, msg);
       if (r === 'sent') {
         await patchFlag(lead.key, d, { nudge_d7sms_sent: 'yes' });
@@ -703,8 +703,8 @@ export default async function handler(req, res) {
     if (RENEWAL_SMS_ENABLED && payload.phone) {
       const courseShort = courseLabel(payload.course_type);
       const msg = touch.days === 0
-        ? `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires today — renew now to stay current: https://cprwestcovina.com  Use code 30BEATS for $30 off. STOP to opt out.`
-        : `Hi ${payload.first_name}, Caroline from CPR West Covina. Your ${courseShort} expires in ${touch.days} days. Want to lock in a renewal slot? Use code 30BEATS for $30 off. Call (626) 605-2067 or reply YES. STOP to opt out.`;
+        ? `Hi ${payload.first_name},\n\nCaroline from CPR West Covina. Your ${courseShort} expires today.\n\nRenew now: https://cprwestcovina.com\nUse code 30BEATS for $30 off.\n\nReply STOP to opt out.`
+        : `Hi ${payload.first_name},\n\nCaroline from CPR West Covina. Your ${courseShort} expires in ${touch.days} days.\n\nWant to lock in a renewal slot? Use code 30BEATS for $30 off.\n\nReply YES or call (626) 605-2067.\n\nReply STOP to opt out.`;
       const r = await sendSmsIfAllowed(payload, msg);
       if (r === 'sent') { smsOk = true; summary.renewalCadenceSMS++; }
       else if (r === 'optout') { smsOptout = true; summary.renewalSmsOptout = (summary.renewalSmsOptout||0) + 1; }
