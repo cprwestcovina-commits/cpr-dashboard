@@ -5625,6 +5625,32 @@ function lastRecoveryStage(d) {
   for (const s of RECOVERY_STAGES) { if (d[s.flag] === 'yes') stage = s; }
   return stage; // null = no recovery touch was sent (direct / same-day)
 }
+// Shared period filter for all recovery analytics cards (default = All time / cumulative).
+function getRecoveryPeriod() { try { return JSON.parse(localStorage.getItem('recoveryPeriod') || 'null') || { year:'all', month:'all' }; } catch(_) { return { year:'all', month:'all' }; } }
+function setRecoveryPeriod(field, val) { const p = getRecoveryPeriod(); p[field] = val; localStorage.setItem('recoveryPeriod', JSON.stringify(p)); if (currentTab === 'revenue') renderRevenue(); }
+function recoveryPeriodMatch(d) {
+  const p = getRecoveryPeriod();
+  if (p.year === 'all' && p.month === 'all') return true;
+  const sa = d.submitted_at || ''; const y = sa.slice(0,4), m = sa.slice(5,7);
+  return (p.year === 'all' || y === p.year) && (p.month === 'all' || m === p.month);
+}
+function renderRecoveryPeriodBar() {
+  const revPage = document.getElementById('page-revenue'); if (!revPage) return;
+  let host = document.getElementById('recoveryPeriodHost');
+  if (!host) { host = document.createElement('div'); host.id = 'recoveryPeriodHost'; host.className = 'card'; host.style.marginTop = '16px'; revPage.appendChild(host); }
+  const p = getRecoveryPeriod();
+  const years = [...new Set(RECORDS.map(r => (r.data.submitted_at||'').slice(0,4)).filter(Boolean))].sort().reverse();
+  const sel = 'background:#fff;border:1px solid var(--gray-300);border-radius:8px;padding:6px 10px;font-size:13px;font-family:inherit;cursor:pointer;';
+  const label = (p.month === 'all' && p.year === 'all') ? 'All time (cumulative)' : `${p.month !== 'all' ? MONTH_NAMES[parseInt(p.month)-1] + ' ' : ''}${p.year !== 'all' ? p.year : ''}`.trim();
+  host.innerHTML = `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <strong style="font-size:15px;">🎯 Recovery analytics — ${escapeHtml(label)}</strong>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+      <span style="font-size:12px;color:var(--gray-500);">Period:</span>
+      <select onchange="setRecoveryPeriod('month',this.value)" style="${sel}"><option value="all" ${p.month==='all'?'selected':''}>All months</option>${MONTH_NAMES.map((mn,i)=>{const v=String(i+1).padStart(2,'0');return `<option value="${v}" ${p.month===v?'selected':''}>${mn}</option>`;}).join('')}</select>
+      <select onchange="setRecoveryPeriod('year',this.value)" style="${sel}"><option value="all" ${p.year==='all'?'selected':''}>All years</option>${years.map(y=>`<option value="${y}" ${p.year===y?'selected':''}>${y}</option>`).join('')}</select>
+    </div></div>`;
+}
+
 function renderRecoveryStageAnalytics() {
   const revPage = document.getElementById('page-revenue');
   if (!revPage) return;
@@ -5641,7 +5667,7 @@ function renderRecoveryStageAnalytics() {
   let emailWins = 0, smsWins = 0;
   RECORDS.forEach(r => {
     const d = r.data;
-    if (d.status !== 'confirmed' || d.source === 'historical_import') return;
+    if (d.status !== 'confirmed' || d.source === 'historical_import' || !recoveryPeriodMatch(d)) return;
     const stage = lastRecoveryStage(d);
     if (!stage) { directCount++; directRev += amountFor(r); return; }
     const t = tally[stage.label]; t.count++; t.revenue += amountFor(r);
@@ -5683,7 +5709,7 @@ function renderRecoveryWinsV2() {
   const tiers = {}; Object.keys(RCV_TIER_META).forEach(k => tiers[k] = { won:0, revenue:0, discount:0 });
   let emailWins=0, smsWins=0, totalWon=0, totalRevenue=0, totalDiscount=0;
   RECORDS.forEach(r => {
-    const d = r.data; if (d.source === 'historical_import') return;
+    const d = r.data; if (d.source === 'historical_import' || !recoveryPeriodMatch(d)) return;
     const wasIssued = RCV_TIER_FLAGS.some(f => d[f] === 'yes');
     if (wasIssued) issued++;
     const won = d.status === 'confirmed' && (d.recovery_redeemed === 'yes' || !!d.recovery_amount_cents);
@@ -5728,7 +5754,7 @@ function renderRecoveryFunnel() {
   let sent = 0, clicked = 0, started = 0, won = 0;
   let emailSent = 0, smsSent = 0, emailClicked = 0, smsClicked = 0;
   RECORDS.forEach(r => {
-    const d = r.data; if (d.source === 'historical_import') return;
+    const d = r.data; if (d.source === 'historical_import' || !recoveryPeriodMatch(d)) return;
     const gotEmail = EMAIL_FLAGS.some(f => d[f] === 'yes');
     const gotSms = SMS_FLAGS.some(f => d[f] === 'yes');
     if (gotEmail) emailSent++;
@@ -5766,6 +5792,7 @@ const __origRenderRevenue = renderRevenue;
 renderRevenue = function() {
   __origRenderRevenue();
   renderSourceConversionAnalytics();
+  renderRecoveryPeriodBar();
   renderRecoveryStageAnalytics();
   renderRecoveryFunnel();
   renderRecoveryWinsV2();
