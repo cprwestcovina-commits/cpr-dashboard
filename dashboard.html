@@ -5717,11 +5717,57 @@ function renderRecoveryWinsV2() {
     <div style="display:flex;flex-wrap:wrap;gap:12px;">${tierCards}</div>`;
 }
 
+// ── Recovery Funnel: Sent → Clicked → Started checkout → Won (split by channel) ──
+function renderRecoveryFunnel() {
+  const revPage = document.getElementById('page-revenue');
+  if (!revPage) return;
+  let host = document.getElementById('recoveryFunnelHost');
+  if (!host) { host = document.createElement('div'); host.id = 'recoveryFunnelHost'; host.className = 'card'; host.style.marginTop = '16px'; revPage.appendChild(host); }
+  const EMAIL_FLAGS = ['rcv_t1_email','rcv_t2_email','rcv_t3_email','rcv_t4_email'];
+  const SMS_FLAGS = ['rcv_t1_sms','rcv_t2_sms','rcv_t3_sms','rcv_t4_sms'];
+  let sent = 0, clicked = 0, started = 0, won = 0;
+  let emailSent = 0, smsSent = 0, emailClicked = 0, smsClicked = 0;
+  RECORDS.forEach(r => {
+    const d = r.data; if (d.source === 'historical_import') return;
+    const gotEmail = EMAIL_FLAGS.some(f => d[f] === 'yes');
+    const gotSms = SMS_FLAGS.some(f => d[f] === 'yes');
+    if (gotEmail) emailSent++;
+    if (gotSms) smsSent++;
+    if (gotEmail || gotSms) sent++;
+    if (d.recovery_clicked === 'yes') { clicked++; if (d.recovery_click_channel === 'sms') smsClicked++; else emailClicked++; }
+    if (d.recovery_order_id) started++;
+    if (d.status === 'confirmed' && (d.recovery_redeemed === 'yes' || d.recovery_amount_cents)) won++;
+  });
+  if (!sent) { host.innerHTML = `<h2 style="margin-bottom:6px;">📉 Recovery Funnel</h2><p style="color:var(--gray-500);font-size:13px;">No recovery links sent yet.</p>`; return; }
+  const pct = (n, base) => base ? Math.round(100 * n / base) : 0;
+  const steps = [
+    { label: 'Links sent', n: sent, sub: `${emailSent} 📧 · ${smsSent} 💬`, color: '#64748b', of: null },
+    { label: 'Clicked the link', n: clicked, sub: `${emailClicked} 📧 · ${smsClicked} 💬`, color: '#2563eb', of: sent },
+    { label: 'Started checkout', n: started, sub: 'reached the discount', color: '#7c3aed', of: clicked },
+    { label: 'Won (paid)', n: won, sub: 'recovered', color: '#0aa05a', of: started },
+  ];
+  const bars = steps.map(s => {
+    const width = sent ? Math.max(4, Math.round(100 * s.n / sent)) : 4;
+    const rate = s.of === null ? '' : `<span style="font-size:11px;color:var(--gray-500);">${pct(s.n, s.of)}% of prev</span>`;
+    return `<div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
+        <span style="font-size:13px;font-weight:600;color:${s.color};">${s.label} <span style="color:var(--gray-400);font-weight:400;">· ${s.sub}</span></span>
+        <span style="font-size:18px;font-weight:800;color:${s.color};">${s.n} ${rate}</span>
+      </div>
+      <div style="background:var(--gray-100);height:14px;border-radius:6px;overflow:hidden;"><div style="background:${s.color};height:100%;width:${width}%;"></div></div>
+    </div>`;
+  }).join('');
+  host.innerHTML = `<h2 style="margin-bottom:4px;">📉 Recovery Funnel</h2>
+    <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">Where abandoned-checkout leads drop off. If <strong>0 clicks</strong> → deliverability (check spam). If they click but don't buy → offer/widget.</p>
+    ${bars}`;
+}
+
 const __origRenderRevenue = renderRevenue;
 renderRevenue = function() {
   __origRenderRevenue();
   renderSourceConversionAnalytics();
   renderRecoveryStageAnalytics();
+  renderRecoveryFunnel();
   renderRecoveryWinsV2();
   renderTimeAnalytics();
 };

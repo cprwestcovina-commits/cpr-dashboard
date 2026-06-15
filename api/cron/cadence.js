@@ -378,12 +378,15 @@ async function recoveryMonitor(all, summary, logEvent) {
       logEvent('error', 'monitor', `🚨 recovery SMS link BROKEN — /api/r redirects to "${loc.slice(0, 70)}"`);
     }
   } catch (e) { summary.recoveryLinkOk = false; logEvent('error', 'monitor', 'recovery link check failed: ' + e.message); }
-  // Passive anomaly: lots of links sent but zero click-throughs → likely a delivery/link problem.
+  // Funnel health: sent → link-clicked → reached checkout (minted).
   const flags = ['rcv_t1_email','rcv_t1_sms','rcv_t2_email','rcv_t2_sms','rcv_t3_email','rcv_t3_sms','rcv_t4_email','rcv_t4_sms'];
   const sent = all.filter(r => flags.some(f => r.data?.[f] === 'yes')).length;
-  const clicked = all.filter(r => r.data?.recovery_order_id).length;
-  summary.rcvSent = sent; summary.rcvClicked = clicked;
-  if (sent >= 30 && clicked === 0) logEvent('warning', 'monitor', `${sent} recovery links sent but 0 click-throughs — worth verifying links work`);
+  const linkClicks = all.filter(r => r.data?.recovery_clicked === 'yes').length;
+  const minted = all.filter(r => r.data?.recovery_order_id).length;
+  summary.rcvSent = sent; summary.rcvLinkClicks = linkClicks; summary.rcvClicked = minted;
+  // Diagnose where the funnel is leaking (only once there's enough volume to be meaningful).
+  if (sent >= 30 && linkClicks === 0) logEvent('warning', 'monitor', `${sent} links sent, 0 link clicks — check email deliverability (spam/promotions)`);
+  else if (linkClicks >= 5 && minted === 0) logEvent('warning', 'monitor', `${linkClicks} clicked the link but 0 reached checkout — check the widget/offer`);
 }
 
 // Upsert a record by key via delete-then-create. The datastore enforces a STRICT schema that
@@ -526,7 +529,8 @@ export default async function handler(req, res) {
         // EMAIL
         if (RCV_EMAIL_HOOK && d[flagE] !== 'yes') {
           const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ti: tier.key, ch: 'email', x: expiry });
-          const url = `${recoveryWidget(d.course_type)}?rcv=${tok}&src=recovery&utm_content=${flagE}`;
+          // Route through /api/r so the email click is tracked (then it redirects to the widget).
+          const url = `${SHORT_BASE}/api/r?t=${tok}`;
           if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryEmailFields(d, tier, amount, url) })) {
             await patchFlag(lead.key, d, { [flagE]: 'yes', recovery_tier: tier.key });
             summary.rcvEmail = (summary.rcvEmail || 0) + 1;
@@ -794,7 +798,7 @@ export default async function handler(req, res) {
     ts: new Date().toISOString(),
     renewalDate: doRenewalToday ? todayUTC : lastRenewalDate,  // marks the day renewals last fired
     recoveryLinkOk: summary.recoveryLinkOk,   // false = SMS recovery link is broken (auto-probed each run)
-    rcvSent: summary.rcvSent, rcvClicked: summary.rcvClicked,
+    rcvSent: summary.rcvSent, rcvLinkClicks: summary.rcvLinkClicks, rcvClicked: summary.rcvClicked,
     totalRecords: all.length,
     confirmedAnchors: confirmedAll.length,
     activeWindow,
