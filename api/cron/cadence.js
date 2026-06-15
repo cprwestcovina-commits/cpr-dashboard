@@ -344,6 +344,36 @@ async function reconcileSquarePayments(all, summary) {
   }
 }
 
+// Supersede stale pending bookings: when one person (same email + same course) has more than one
+// pending booking — e.g. they rebooked a new slot via the "pick a new time" link — keep only the
+// NEWEST and mark the older ones 'replaced'. This stops the dashboard showing phantom duplicates and
+// stops the generic Square payment link from confirming a stale date. Guards: never touch manual
+// entries / historical imports, and never retire a lead with an outstanding recovery link (could
+// orphan an in-flight discounted payment).
+async function supersedeStalePendings(all, summary, logEvent) {
+  const norm = s => (s || '').toLowerCase().trim();
+  const groups = {};
+  for (const r of all) {
+    const d = r.data;
+    if (!d || d.status !== 'pending' || !d.email) continue;
+    if (d.source === 'manual' || d.source === 'historical_import') continue;
+    const key = norm(d.email) + '|' + norm((d.course_type || 'bls').replace(/^aha_/, ''));
+    (groups[key] = groups[key] || []).push(r);
+  }
+  let retired = 0;
+  for (const k in groups) {
+    const g = groups[k];
+    if (g.length < 2) continue;
+    g.sort((a, b) => new Date(b.data.submitted_at || 0) - new Date(a.data.submitted_at || 0)); // newest first
+    for (const r of g.slice(1)) {
+      if (r.data.recovery_order_id) continue; // outstanding discount link → leave it, don't orphan a payment
+      const ok = await patchFlag(r.key, r.data, { status: 'replaced', lead_stage: 'replaced' });
+      if (ok) { r.data = { ...r.data, status: 'replaced', lead_stage: 'replaced' }; retired++; }
+    }
+  }
+  if (retired) { summary.superseded = retired; logEvent('info', 'dedup', `superseded ${retired} stale pending(s) — kept newest per person + course`); }
+}
+
 // Delete recovery payment links once they're spent (paid → single-use) or the lead is long dead,
 // so the Square account doesn't accumulate dead links.
 async function cleanupRecoveryLinks(all, summary) {
@@ -487,6 +517,9 @@ export default async function handler(req, res) {
   // Timestamped event logger → feeds the dashboard's live Logs feed.
   const logEvent = (level, src, msg) => { summary.events.push({ ts: new Date().toISOString(), level, src, msg }); };
   logEvent('info', 'cron', `run started · ${all.length} records, ${all.filter(r => r.data?.status === 'pending').length} pending`);
+
+  // === Supersede stale duplicate pendings BEFORE reconcile, so payment confirms the newest slot ===
+  try { await supersedeStalePendings(all, summary, logEvent); } catch (e) { summary.errors.push('supersede: ' + e.message); }
 
   // === Server-side Square reconciliation ===
   // Match completed Square payments to pending leads and confirm them (fire confirmation + calendar)
