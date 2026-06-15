@@ -5712,13 +5712,16 @@ function renderRecoveryWinsV2() {
     const d = r.data; if (d.source === 'historical_import' || !recoveryPeriodMatch(d)) return;
     const wasIssued = RCV_TIER_FLAGS.some(f => d[f] === 'yes');
     if (wasIssued) issued++;
-    const won = d.status === 'confirmed' && (d.recovery_redeemed === 'yes' || !!d.recovery_amount_cents);
+    // A recovery win = got a recovery touch and then BOOKED (any way), not only via the discount link.
+    const won = d.status === 'confirmed' && (wasIssued || d.recovery_tier || d.recovery_redeemed === 'yes' || d.recovery_amount_cents);
     if (!won) return;
     totalWon++; totalRevenue += amountFor(r);
     const disc = Number(d.recovery_amount_cents || 0) / 100; totalDiscount += disc;
-    const tk = (d.recovery_tier || '').replace(/[^t1-4]/g,'') || (d.recovery_tier||'');
-    if (tiers[d.recovery_tier]) { tiers[d.recovery_tier].won++; tiers[d.recovery_tier].revenue += amountFor(r); tiers[d.recovery_tier].discount += disc; }
-    if (d.recovery_channel === 'sms') smsWins++; else emailWins++;
+    const tk = d.recovery_tier || (RCV_TIER_FLAGS.filter(f => d[f] === 'yes').map(f => f.split('_')[1]).pop()) || 't1';
+    if (tiers[tk]) { tiers[tk].won++; tiers[tk].revenue += amountFor(r); tiers[tk].discount += disc; }
+    // Channel: prefer the click channel, else infer from which flags fired
+    const ch = d.recovery_channel || (RCV_TIER_FLAGS.some(f => f.endsWith('_sms') && d[f] === 'yes') && !RCV_TIER_FLAGS.some(f => f.endsWith('_email') && d[f] === 'yes') ? 'sms' : 'email');
+    if (ch === 'sms') smsWins++; else emailWins++;
   });
   if (!issued && !totalWon) { host.innerHTML = `<h2 style="margin-bottom:6px;">🎟️ Recovery Wins</h2><p style="color:var(--gray-500);font-size:13px;">No recovery-link conversions yet. This fills in once the new discount cadence is live.</p>`; return; }
   const rate = issued ? Math.round(100*totalWon/issued) : 0;
@@ -5761,31 +5764,37 @@ function renderRecoveryFunnel() {
     if (gotSms) smsSent++;
     if (gotEmail || gotSms) sent++;
     if (d.recovery_clicked === 'yes') { clicked++; if (d.recovery_click_channel === 'sms') smsClicked++; else emailClicked++; }
-    if (d.recovery_order_id) started++;
-    if (d.status === 'confirmed' && (d.recovery_redeemed === 'yes' || d.recovery_amount_cents)) won++;
+    if (d.recovery_order_id) started++;  // used the discount link specifically
+    // A recovery win = got a touch and then booked, ANY way (most book the normal path, not the link).
+    if (d.status === 'confirmed' && (gotEmail || gotSms)) won++;
   });
   if (!sent) { host.innerHTML = `<h2 style="margin-bottom:6px;">📉 Recovery Funnel</h2><p style="color:var(--gray-500);font-size:13px;">No recovery links sent yet.</p>`; return; }
-  const pct = (n, base) => base ? Math.round(100 * n / base) : 0;
-  const steps = [
-    { label: 'Links sent', n: sent, sub: `${emailSent} 📧 · ${smsSent} 💬`, color: '#64748b', of: null },
-    { label: 'Clicked the link', n: clicked, sub: `${emailClicked} 📧 · ${smsClicked} 💬`, color: '#2563eb', of: sent },
-    { label: 'Started checkout', n: started, sub: 'reached the discount', color: '#7c3aed', of: clicked },
-    { label: 'Won (paid)', n: won, sub: 'recovered', color: '#0aa05a', of: started },
-  ];
-  const bars = steps.map(s => {
+  const recRate = sent ? Math.round(100 * won / sent) : 0;
+  // Primary outcome: sent → booked back. (Wins don't require the discount link — most book normally.)
+  const primary = [
+    { label: 'Recovery touches sent', n: sent, sub: `${emailSent} 📧 · ${smsSent} 💬`, color: '#64748b' },
+    { label: '🏆 Booked back (recovered)', n: won, sub: `${recRate}% recovery rate`, color: '#0aa05a' },
+  ].map(s => {
     const width = sent ? Math.max(4, Math.round(100 * s.n / sent)) : 4;
-    const rate = s.of === null ? '' : `<span style="font-size:11px;color:var(--gray-500);">${pct(s.n, s.of)}% of prev</span>`;
     return `<div style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
-        <span style="font-size:13px;font-weight:600;color:${s.color};">${s.label} <span style="color:var(--gray-400);font-weight:400;">· ${s.sub}</span></span>
-        <span style="font-size:18px;font-weight:800;color:${s.color};">${s.n} ${rate}</span>
+        <span style="font-size:14px;font-weight:700;color:${s.color};">${s.label} <span style="color:var(--gray-400);font-weight:400;font-size:12px;">· ${s.sub}</span></span>
+        <span style="font-size:20px;font-weight:800;color:${s.color};">${s.n}</span>
       </div>
-      <div style="background:var(--gray-100);height:14px;border-radius:6px;overflow:hidden;"><div style="background:${s.color};height:100%;width:${width}%;"></div></div>
+      <div style="background:var(--gray-100);height:16px;border-radius:6px;overflow:hidden;"><div style="background:${s.color};height:100%;width:${width}%;"></div></div>
     </div>`;
   }).join('');
   host.innerHTML = `<h2 style="margin-bottom:4px;">📉 Recovery Funnel</h2>
-    <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">Where abandoned-checkout leads drop off. If <strong>0 clicks</strong> → deliverability (check spam). If they click but don't buy → offer/widget.</p>
-    ${bars}`;
+    <p style="color:var(--gray-500);font-size:13px;margin-bottom:14px;">Leads who abandoned checkout, got a recovery email/text, and came back. A "win" = they booked after a touch (most book the normal way — they don't need the discount link).</p>
+    ${primary}
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--gray-200);">
+      <div style="font-size:12px;font-weight:700;color:var(--gray-600);margin-bottom:8px;">DISCOUNT-LINK ENGAGEMENT (how many used the personalized link)</div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;">
+        <span>🖱️ Clicked the link: <strong>${clicked}</strong> <span style="color:var(--gray-400);">(${emailClicked}📧 ${smsClicked}💬)</span></span>
+        <span>🎟️ Used the discount: <strong>${started}</strong></span>
+      </div>
+      ${clicked === 0 && won > 0 ? `<p style="font-size:12px;color:var(--orange);margin:8px 0 0;">💡 Wins are coming from the <strong>reminders</strong>, not the discount link (0 clicks). The reminder is what's working — the discount feature is going unused.</p>` : ''}
+    </div>`;
 }
 
 const __origRenderRevenue = renderRevenue;
