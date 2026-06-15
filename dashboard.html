@@ -5793,7 +5793,9 @@ renderRevenue = function() {
   __origRenderRevenue();
   renderSourceConversionAnalytics();
   renderRecoveryPeriodBar();
-  renderRecoveryStageAnalytics();
+  // Legacy "Conversions by Recovery Stage" retired — it showed the old T+2hr/Day-5/Day-7 cadence.
+  // Current cadence is covered by the Funnel + Wins cards below.
+  document.getElementById('recoveryStageHost')?.remove();
   renderRecoveryFunnel();
   renderRecoveryWinsV2();
   renderTimeAnalytics();
