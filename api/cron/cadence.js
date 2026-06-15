@@ -90,21 +90,21 @@ function recoveryEmailFields(d, tier, amount, url) {
   if (tier.final) {
     return {
       course_label: course,
-      subject: `Final chance, ${first} — ${amt} off your ${course} (expires in 48 hrs)`,
-      headline: `Your last chance — ${amt} off`,
-      subhead: `This is the best offer we can do. With this code you won't find AHA certification cheaper in SoCal — and reschedules are always free. Pick any date that works.`,
-      cta_label: 'Claim my discount →',
+      subject: `Final chance, ${first} - ${amt} off your ${course} (expires in 48 hrs)`,
+      headline: `Your last chance &mdash; ${amt} off`,
+      subhead: `This is the best offer we can do. With this code you won't find AHA certification cheaper in SoCal &mdash; and reschedules are always free. Pick any date that works.`,
+      cta_label: 'Claim my discount &rarr;',
       book_url: url,
       expiry_text: 'Expires in 48 hours',
-      backup_text: 'Even after the deadline, your link still saves you $20 — so you never miss out.',
+      backup_text: 'Even after the deadline, your link still saves you $20 &mdash; so you never miss out.',
     };
   }
   return {
     course_label: course,
     subject: `${first}, here's ${amt} off your ${course}`,
-    headline: `${amt} off — just for you`,
-    subhead: `Your discount is already applied — just pick any date that works. Reschedules are always free.`,
-    cta_label: 'Pick my date →',
+    headline: `${amt} off &mdash; just for you`,
+    subhead: `Your discount is already applied &mdash; just pick any date that works. Reschedules are always free.`,
+    cta_label: 'Pick my date &rarr;',
     book_url: url,
     expiry_text: 'Valid for 3 days',
     backup_text: '',
@@ -115,9 +115,9 @@ function recoverySms(d, tier, amount, shortUrl) {
   const course = courseLabel(d.course_type);
   const amt = `$${Math.round(amount / 100)}`;
   if (tier.final) {
-    return `${first}, last chance — ${amt} off your ${course} on ${d.date_formatted}, expires in 48 hrs. Best price we can do: ${shortUrl}  Reply STOP to opt out.`;
+    return `${first}, last chance - ${amt} off your ${course} on ${d.date_formatted}, expires in 48 hrs. Best price we can do: ${shortUrl}  Reply STOP to opt out.`;
   }
-  return `Hi ${first}, Caroline from CPR West Covina — here's ${amt} off your ${course} on ${d.date_formatted}. Pick any date: ${shortUrl}  Reply STOP to opt out.`;
+  return `Hi ${first}, Caroline from CPR West Covina - here's ${amt} off your ${course} on ${d.date_formatted}. Pick any date: ${shortUrl}  Reply STOP to opt out.`;
 }
 
 function ageHours(submittedAt) {
