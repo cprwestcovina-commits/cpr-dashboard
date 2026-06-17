@@ -76,12 +76,33 @@ export default async function handler(req, res) {
 
     const pendingNow = real.filter(d => d.status === 'pending').length;
 
+    // Upcoming classes — group future bookings into class sessions (date + time + course)
+    // with booked (confirmed) + pending seat counts, for the command-center Calendar screen.
+    const todayStr = new Date(now).toISOString().slice(0, 10);
+    const slots = {};
+    leads.filter(d => d.date && d.date >= todayStr && (d.status === 'confirmed' || d.status === 'pending')).forEach(d => {
+      const course = LABEL[norm(d.course_type)] || norm(d.course_type);
+      const k = d.date + '|' + (d.time_label || '') + '|' + course;
+      if (!slots[k]) slots[k] = { date: d.date, date_label: d.date_formatted || '', time: d.time_label || '', course, booked: 0, pending: 0 };
+      if (d.status === 'confirmed') slots[k].booked++; else slots[k].pending++;
+    });
+    const upcoming = Object.values(slots)
+      .filter(u => { const t = Date.parse(u.date + 'T00:00:00'); return !isNaN(t) && t <= now + 21 * DAY; })
+      .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+      .slice(0, 40);
+    const upcoming_summary = {
+      classes: upcoming.length,
+      booked: upcoming.reduce((s, u) => s + u.booked, 0),
+      pending: upcoming.reduce((s, u) => s + u.pending, 0),
+    };
+
     res.status(200).json({
       generated_at: new Date(now).toISOString(),
       day: window(1), week: window(7), quarter: window(90),
       recovery: { touched: touched.length, recovered: recovered.length, rate: touched.length ? Math.round(1000 * recovered.length / touched.length) / 10 : 0 },
       renewals_due: { d30: due(30), d60: due(60), d90: due(90) },
       pending_now: pendingNow,
+      upcoming, upcoming_summary,
       totals: { confirmed_all: leads.filter(d => d.status === 'confirmed').length },
     });
   } catch (e) {
