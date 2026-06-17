@@ -63,8 +63,15 @@ export default async function handler(req, res) {
     const touched = real.filter(d => touchFlags.some(f => d[f] === 'yes'));
     const recovered = touched.filter(d => d.status === 'confirmed');
 
-    // Renewals due — any confirmed class (incl. historical) whose 2yr expiry lands in the next N days
-    const expiries = leads.filter(d => d.status === 'confirmed' && d.date).map(d => Date.parse(d.date + 'T00:00:00')).filter(t => !isNaN(t)).map(t => t + 730 * DAY);
+    // Renewals due — UNIQUE students (latest class per email) whose 2yr expiry lands in next N days.
+    // Dedupe by email so we count people, not duplicate rows.
+    const lastClass = {};
+    leads.filter(d => d.status === 'confirmed' && d.date && d.email).forEach(d => {
+      const t = Date.parse(d.date + 'T00:00:00'); if (isNaN(t)) return;
+      const e = d.email.toLowerCase().trim();
+      if (!lastClass[e] || t > lastClass[e]) lastClass[e] = t;
+    });
+    const expiries = Object.values(lastClass).map(t => t + 730 * DAY);
     const due = (n) => expiries.filter(e => e > now && e <= now + n * DAY).length;
 
     const pendingNow = real.filter(d => d.status === 'pending').length;
