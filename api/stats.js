@@ -4,8 +4,15 @@ const MAKE_TOKEN = process.env.MAKE_API_TOKEN || '4317021d-3786-4640-8265-34e63c
 const DS = 'https://us2.make.com/api/v2/data-stores/100809/data';
 const TEAM = '2313459';
 
-const PRICE = { bls: 8900, bls_renewal: 8900, rnw: 8900, renewal: 8900, heartsaver: 9800, hs: 9800, acls: 25000, pals: 25000 };
-const LABEL = { bls: 'BLS', bls_renewal: 'BLS Renewal', rnw: 'BLS Renewal', renewal: 'BLS Renewal', heartsaver: 'Heartsaver', hs: 'Heartsaver', acls: 'ACLS', pals: 'PALS' };
+const PRICE = {
+  bls: 8900, bls_renewal: 8900, rnw: 8900, renewal: 8900, heartsaver: 9800, hs: 9800, acls: 25000, pals: 25000,
+  bls_heartcode: 7900, bls_spanish: 8900, heartsaver_spanish: 9800, redcross_fa_cpr_aed: 5900,
+};
+const LABEL = {
+  bls: 'BLS', bls_renewal: 'BLS Renewal', rnw: 'BLS Renewal', renewal: 'BLS Renewal', heartsaver: 'Heartsaver', hs: 'Heartsaver', acls: 'ACLS', pals: 'PALS',
+  bls_heartcode: 'HeartCode BLS', bls_spanish: 'BLS (Spanish)', heartsaver_spanish: 'Heartsaver (Spanish)', redcross_fa_cpr_aed: 'Red Cross First Aid/CPR/AED',
+};
+// strip the aha_ prefix (redcross_ has none, so it passes through to its own keys above)
 const norm = (c) => (c || 'bls').toLowerCase().replace(/^aha_/, '');
 const priceOf = (d) => {
   const a = parseInt(d.amount_paid_cents || '0', 10);

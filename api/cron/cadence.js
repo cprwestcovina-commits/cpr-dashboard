@@ -63,11 +63,14 @@ const RECOVERY_LADDER = {
   heartsaver:  [1000, 1500, 2000, 3000],
   acls:        [2500, 3500, 4000, 5000],
   pals:        [2500, 3500, 4000, 5000],
+  redcross:    [500, 1000, 1000, 1000], // CAP: Red Cross only ever gets $5–$10 off
 };
 function rcvNormCourse(ct) {
   const c = (ct || '').toLowerCase().replace(/^aha_/, '');
   if (c === 'rnw' || c === 'renewal' || c === 'bls_renewal') return 'bls_renewal';
-  if (c === 'hs') return 'heartsaver';
+  if (c === 'hs' || c === 'heartsaver_spanish') return 'heartsaver';
+  if (c === 'bls_heartcode' || c === 'bls_spanish') return 'bls';
+  if (c.startsWith('redcross')) return 'redcross';
   if (['bls', 'heartsaver', 'acls', 'pals'].includes(c)) return c;
   return 'bls';
 }
@@ -77,6 +80,7 @@ function recoveryWidget(ct) {
   if (c === 'heartsaver') return 'https://cpr-dashboard-cprwc.vercel.app/heartsaver.html';
   if (c === 'acls') return 'https://cpr-dashboard-cprwc.vercel.app/acls.html';
   if (c === 'pals') return 'https://cpr-dashboard-cprwc.vercel.app/pals.html';
+  if (c === 'redcross') return 'https://cprwestcovina.com/#book-redcross_fa_cpr_aed';
   return 'https://cprwestcovina-commits.github.io/bls-booking/bls-booking.html';
 }
 function ptHourNow() {
@@ -127,6 +131,10 @@ function ageHours(submittedAt) {
 function courseLabel(ct) {
   const c = (ct || '').toLowerCase().replace(/^aha_/, '');
   if (c === 'renewal' || c === 'rnw' || c === 'bls_renewal') return 'BLS Renewal';
+  if (c === 'bls_heartcode') return 'HeartCode BLS';
+  if (c === 'bls_spanish') return 'BLS (Spanish)';
+  if (c === 'heartsaver_spanish') return 'Heartsaver (Spanish)';
+  if (c.startsWith('redcross')) return 'Red Cross First Aid/CPR/AED';
   if (c === 'heartsaver' || c === 'hs') return 'Heartsaver';
   if (c === 'acls') return 'ACLS';
   if (c === 'pals') return 'PALS';
@@ -136,9 +144,10 @@ function courseLabel(ct) {
 // Customers see a code that matches the class they were booking.
 function recoveryCode(ct) {
   const c = (ct || '').toLowerCase().replace(/^aha_/, '');
-  if (c === 'heartsaver' || c === 'hs') return 'SAVERBACK30';
+  if (c === 'heartsaver' || c === 'hs' || c === 'heartsaver_spanish') return 'SAVERBACK30';
   if (c === 'acls') return 'ACLSBACK30';
   if (c === 'pals') return 'PALSBACK30';
+  if (c.startsWith('redcross')) return 'HEALTHCARE10'; // RC capped at $10 (never the $30 codes)
   return 'BLSBACK30';
 }
 // Booking page per cert, tagged so we know which recovery touch drove the click.
@@ -147,6 +156,7 @@ function recoveryBookUrl(ct, touch) {
   const base = (c === 'heartsaver' || c === 'hs') ? 'https://cpr-dashboard-cprwc.vercel.app/heartsaver.html'
     : c === 'acls' ? 'https://cpr-dashboard-cprwc.vercel.app/acls.html'
     : c === 'pals' ? 'https://cpr-dashboard-cprwc.vercel.app/pals.html'
+    : c.startsWith('redcross') ? 'https://cprwestcovina.com/#book-redcross_fa_cpr_aed'
     : 'https://cprwestcovina-commits.github.io/bls-booking/bls-booking.html';
   return `${base}?src=recovery&rc=${touch}`;
 }
@@ -548,6 +558,7 @@ export default async function handler(req, res) {
       sms_consent: d.sms_consent,
     };
     const isAclsPals = /acls|pals/i.test(d.course_type || '');
+    const isRedCross = /redcross/i.test(d.course_type || ''); // RC capped at $5-$10; skip the $30 Day-5 offers
 
     if (RECOVERY_V2) {
       // ─── Recovery cadence v2: 4 tiers, personalized signed ?rcv= discount links ───
@@ -612,7 +623,7 @@ export default async function handler(req, res) {
     }
 
     // Day 5 email — fire webhook + PATCH flag directly (don't rely on Make scenario to flag)
-    if (age >= 120 && age <= 720 && d.comeback30_sent !== 'yes') {
+    if (age >= 120 && age <= 720 && !isRedCross && d.comeback30_sent !== 'yes') {
       const d5Payload = { ...payload, promo_code: recoveryCode(d.course_type), book_url: recoveryBookUrl(d.course_type, 'd5email') };
       if (await fireWebhook(D5_EMAIL_HOOK, d5Payload)) {
         await patchFlag(lead.key, d, { comeback30_sent: 'yes', lead_stage: 'email2' });
@@ -621,7 +632,7 @@ export default async function handler(req, res) {
     }
 
     // Day 5 SMS
-    if (age >= 120 && age <= 720 && d.nudge_d5sms_sent !== 'yes') {
+    if (age >= 120 && age <= 720 && !isRedCross && d.nudge_d5sms_sent !== 'yes') {
       const msg = `Hi ${payload.first_name},\n\nCaroline here. I held a seat for ${courseLabel(payload.course_type)} on ${payload.date_formatted}.\n\nUse code ${recoveryCode(payload.course_type)} at checkout for $30 off - expires soon.\n\nReply STOP to opt out.`;
       const r = await sendSmsIfAllowed(payload, msg);
       if (r === 'sent') {
