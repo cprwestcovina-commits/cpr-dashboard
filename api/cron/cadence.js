@@ -559,8 +559,15 @@ export default async function handler(req, res) {
     };
     const isAclsPals = /acls|pals/i.test(d.course_type || '');
     const isRedCross = /redcross/i.test(d.course_type || ''); // RC capped at $5-$10; skip the $30 Day-5 offers
+    // New courses (HeartCode, Spanish, Red Cross) book through the main-site widget with direct
+    // Square links — the v2 discount-link recovery (/api/r + /api/recovery-checkout) only supports
+    // bls/bls_renewal/heartsaver/acls/pals and would route them to the wrong (BLS) calendar with no
+    // real discount. Skip recovery for these until it's wired so we never send a broken "$X off" link.
+    const recoveryUnsupported = /heartcode|spanish|redcross/i.test(d.course_type || '');
 
-    if (RECOVERY_V2) {
+    if (recoveryUnsupported) {
+      // no automated recovery for these courses yet
+    } else if (RECOVERY_V2) {
       // ─── Recovery cadence v2: 4 tiers, personalized signed ?rcv= discount links ───
       // Only the single tier whose window contains the lead's age fires (backfill-safe: a lead
       // who enters mid-cadence gets only its current tier, never a stale "24h" offer).
