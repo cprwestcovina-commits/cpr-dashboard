@@ -575,11 +575,15 @@ export default async function handler(req, res) {
           const tok = signToken({ k: lead.key, c: rcvNormCourse(d.course_type), a: amount, t: `$${Math.round(amount/100)} off`, ti: tier.key, ch: 'email', x: expiry });
           // Route through /api/r so the email click is tracked (then it redirects to the widget).
           const url = `${SHORT_BASE}/api/r?t=${tok}`;
+          // Stamp the "sent" flag BEFORE firing. A slow/non-2xx webhook ack must never
+          // cause the same tier to re-send on the next cron run (idempotent — was causing
+          // duplicate recovery emails when Make's response lagged).
+          await patchFlag(lead.key, d, { [flagE]: 'yes', recovery_tier: tier.key });
+          d[flagE] = 'yes';
           if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryEmailFields(d, tier, amount, url) })) {
-            await patchFlag(lead.key, d, { [flagE]: 'yes', recovery_tier: tier.key });
             summary.rcvEmail = (summary.rcvEmail || 0) + 1;
             logEvent('info', 'recovery', `${tier.key.toUpperCase()} email → ${payload.email} ($${Math.round(amount/100)} off ${courseLabel(d.course_type)})`);
-          } else { summary.errors.push(`rcv ${tier.key} email: ${payload.first_name}`); logEvent('error', 'recovery', `email FAILED → ${payload.email} (${tier.key})`); }
+          } else { summary.errors.push(`rcv ${tier.key} email: ${payload.first_name}`); logEvent('error', 'recovery', `email send failed (flag already set, no retry) → ${payload.email} (${tier.key})`); }
         }
 
         // SMS — consented + business hours (9 AM–7 PM PT). Outside hours → hold for next run.
