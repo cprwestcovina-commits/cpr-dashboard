@@ -160,6 +160,41 @@ function recoveryBookUrl(ct, touch) {
     : 'https://cprwestcovina-commits.github.io/bls-booking/bls-booking.html';
   return `${base}?src=recovery&rc=${touch}`;
 }
+// Code-based recovery (#1) for the new courses that book through the main-site widget
+// (HeartCode / Spanish / Red Cross). One honest email → the correct main-site calendar with a
+// standard promo code the customer enters at Square checkout (no personalized discount-link yet).
+function recoveryCodeFields(d) {
+  const ct = (d.course_type || '').toLowerCase();
+  const isSpanish = /spanish/.test(ct);
+  const isRC = /redcross/.test(ct);
+  const course = courseLabel(d.course_type);
+  const code = isRC ? 'RC5' : 'HEALTHCARE10';
+  const amt = isRC ? 5 : 10;
+  const url = `https://cprwestcovina.com/#book-${d.course_type || ''}`;
+  const first = d.first_name || (isSpanish ? 'Hola' : 'there');
+  if (isSpanish) {
+    return {
+      course_label: course,
+      subject: `${first}, tu lugar para ${course} sigue disponible — $${amt} de descuento`,
+      headline: `$${amt} de descuento`,
+      subhead: `Usa el código ${code} al pagar y elige cualquier fecha que te funcione. Los cambios de fecha siempre son gratis.`,
+      cta_label: 'Reservar mi fecha &rarr;',
+      book_url: url,
+      expiry_text: 'Oferta por tiempo limitado',
+      backup_text: '',
+    };
+  }
+  return {
+    course_label: course,
+    subject: `${first}, your ${course} spot is still open — $${amt} off`,
+    headline: `$${amt} off your ${course}`,
+    subhead: `Use code ${code} at checkout and pick any date that works. Reschedules are always free.`,
+    cta_label: 'Pick my date &rarr;',
+    book_url: url,
+    expiry_text: 'Limited-time offer',
+    backup_text: '',
+  };
+}
 // Build all the renewal-email fields in JS so the Make template stays a dumb fill-in-the-blank
 // (no switch/if formulas in Make → nothing to corrupt). `days` is the touch milestone.
 function renewalEmailFields(courseType, days, firstName) {
@@ -566,7 +601,15 @@ export default async function handler(req, res) {
     const recoveryUnsupported = /heartcode|spanish|redcross/i.test(d.course_type || '');
 
     if (recoveryUnsupported) {
-      // no automated recovery for these courses yet
+      // Code-based recovery (#1): one email → the right main-site calendar + a standard promo code.
+      if (RCV_EMAIL_HOOK && age >= 24 && age <= 360 && d.rcv_code_email !== 'yes') {
+        await patchFlag(lead.key, d, { rcv_code_email: 'yes', recovery_tier: 'code' });
+        d.rcv_code_email = 'yes';
+        if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryCodeFields(d) })) {
+          summary.rcvEmail = (summary.rcvEmail || 0) + 1;
+          logEvent('info', 'recovery', `code email → ${payload.email} (${courseLabel(d.course_type)})`);
+        } else { summary.errors.push(`rcv code email: ${payload.first_name}`); logEvent('error', 'recovery', `code email send failed → ${payload.email}`); }
+      }
     } else if (RECOVERY_V2) {
       // ─── Recovery cadence v2: 4 tiers, personalized signed ?rcv= discount links ───
       // Only the single tier whose window contains the lead's age fires (backfill-safe: a lead
