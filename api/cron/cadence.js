@@ -603,12 +603,16 @@ export default async function handler(req, res) {
     if (recoveryUnsupported) {
       // Code-based recovery (#1): one email → the right main-site calendar + a standard promo code.
       if (RCV_EMAIL_HOOK && age >= 24 && age <= 360 && d.rcv_code_email !== 'yes') {
-        await patchFlag(lead.key, d, { rcv_code_email: 'yes', recovery_tier: 'code' });
-        d.rcv_code_email = 'yes';
-        if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryCodeFields(d) })) {
-          summary.rcvEmail = (summary.rcvEmail || 0) + 1;
-          logEvent('info', 'recovery', `code email → ${payload.email} (${courseLabel(d.course_type)})`);
-        } else { summary.errors.push(`rcv code email: ${payload.first_name}`); logEvent('error', 'recovery', `code email send failed → ${payload.email}`); }
+        // Only send if the "sent" flag actually saved. If the datastore PATCH fails
+        // (e.g. 429 rate limit), DO NOT send — retry next run. Prevents duplicate emails.
+        const locked = await patchFlag(lead.key, d, { rcv_code_email: 'yes', recovery_tier: 'code' });
+        if (locked) {
+          d.rcv_code_email = 'yes';
+          if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryCodeFields(d) })) {
+            summary.rcvEmail = (summary.rcvEmail || 0) + 1;
+            logEvent('info', 'recovery', `code email → ${payload.email} (${courseLabel(d.course_type)})`);
+          } else { summary.errors.push(`rcv code email: ${payload.first_name}`); logEvent('error', 'recovery', `code email send failed → ${payload.email}`); }
+        } else { logEvent('warning', 'recovery', `code email skipped (flag lock failed, will retry) → ${payload.email}`); }
       }
     } else if (RECOVERY_V2) {
       // ─── Recovery cadence v2: 4 tiers, personalized signed ?rcv= discount links ───
@@ -628,12 +632,16 @@ export default async function handler(req, res) {
           // Stamp the "sent" flag BEFORE firing. A slow/non-2xx webhook ack must never
           // cause the same tier to re-send on the next cron run (idempotent — was causing
           // duplicate recovery emails when Make's response lagged).
-          await patchFlag(lead.key, d, { [flagE]: 'yes', recovery_tier: tier.key });
-          d[flagE] = 'yes';
-          if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryEmailFields(d, tier, amount, url) })) {
-            summary.rcvEmail = (summary.rcvEmail || 0) + 1;
-            logEvent('info', 'recovery', `${tier.key.toUpperCase()} email → ${payload.email} ($${Math.round(amount/100)} off ${courseLabel(d.course_type)})`);
-          } else { summary.errors.push(`rcv ${tier.key} email: ${payload.first_name}`); logEvent('error', 'recovery', `email send failed (flag already set, no retry) → ${payload.email} (${tier.key})`); }
+          // Only send if the "sent" flag actually saved (a failed PATCH = 429 must not
+          // let the same tier re-send next run). No confirmed flag → no email, retry later.
+          const lockedE = await patchFlag(lead.key, d, { [flagE]: 'yes', recovery_tier: tier.key });
+          if (lockedE) {
+            d[flagE] = 'yes';
+            if (await fireWebhook(RCV_EMAIL_HOOK, { ...payload, ...recoveryEmailFields(d, tier, amount, url) })) {
+              summary.rcvEmail = (summary.rcvEmail || 0) + 1;
+              logEvent('info', 'recovery', `${tier.key.toUpperCase()} email → ${payload.email} ($${Math.round(amount/100)} off ${courseLabel(d.course_type)})`);
+            } else { summary.errors.push(`rcv ${tier.key} email: ${payload.first_name}`); logEvent('error', 'recovery', `email send failed → ${payload.email} (${tier.key})`); }
+          } else { logEvent('warning', 'recovery', `email skipped (flag lock failed, will retry) → ${payload.email} (${tier.key})`); }
         }
 
         // SMS — consented + business hours (9 AM–7 PM PT). Outside hours → hold for next run.
