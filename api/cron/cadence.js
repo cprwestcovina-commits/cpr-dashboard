@@ -419,6 +419,38 @@ async function supersedeStalePendings(all, summary, logEvent) {
   if (retired) { summary.superseded = retired; logEvent('info', 'dedup', `superseded ${retired} stale pending(s) — kept newest per person + course`); }
 }
 
+// Retire pending records when the SAME person already has a CONFIRMED/paid booking for the same
+// course around the same time (= a duplicate form-submit that got paid under another record).
+// Without this, the leftover pending stays in the recovery cadence and a paying customer keeps
+// getting "you didn't finish — here's a discount" emails. Guards: skip manual/historical; only
+// match within a 21-day window so a genuine re-booking (e.g. a real renewal 2yr later) is untouched.
+async function retirePaidDuplicates(all, summary, logEvent) {
+  const norm = s => (s || '').toLowerCase().trim();
+  const fam = c => { c = norm(c).replace(/^aha_/, ''); return /renew|rnw/.test(c) ? 'renewal' : c; };
+  const isPaid = d => parseInt(d.amount_paid_cents || 0, 10) > 0 || !!d.square_payment_id || d.status === 'confirmed';
+  const WINDOW = 21 * 86400000;
+  const confirmed = {};
+  for (const r of all) {
+    const d = r.data; if (!d || !isPaid(d) || !d.email) continue;
+    const key = norm(d.email) + '|' + fam(d.course_type);
+    (confirmed[key] = confirmed[key] || []).push(new Date(d.submitted_at || 0).getTime());
+  }
+  let retired = 0;
+  for (const r of all) {
+    const d = r.data;
+    if (!d || d.status !== 'pending' || !d.email) continue;
+    if (d.source === 'manual' || d.source === 'historical_import') continue;
+    const times = confirmed[norm(d.email) + '|' + fam(d.course_type)];
+    if (!times) continue;
+    const pt = new Date(d.submitted_at || 0).getTime();
+    if (times.some(t => Math.abs(t - pt) <= WINDOW)) {
+      const ok = await patchFlag(r.key, d, { status: 'replaced', lead_stage: 'paid_duplicate' });
+      if (ok) { r.data = { ...d, status: 'replaced', lead_stage: 'paid_duplicate' }; retired++; }
+    }
+  }
+  if (retired) { summary.paidDuplicates = retired; logEvent('info', 'dedup', `retired ${retired} pending(s) for already-paid customers — stops post-payment recovery emails`); }
+}
+
 // Delete recovery payment links once they're spent (paid → single-use) or the lead is long dead,
 // so the Square account doesn't accumulate dead links.
 async function cleanupRecoveryLinks(all, summary) {
@@ -570,6 +602,8 @@ export default async function handler(req, res) {
   // Match completed Square payments to pending leads and confirm them (fire confirmation + calendar)
   // — so customers get confirmed within ~2hr of paying, even when nobody has the dashboard open.
   try { await reconcileSquarePayments(all, summary); } catch (e) { summary.errors.push('reconcile: ' + e.message); }
+  // Retire pending dupes of already-paid customers so they never get post-payment recovery emails.
+  try { await retirePaidDuplicates(all, summary, logEvent); } catch (e) { summary.errors.push('paidDup: ' + e.message); }
   if (RECOVERY_V2) { try { await cleanupRecoveryLinks(all, summary); } catch (e) { summary.errors.push('cleanup: ' + e.message); } }
   if (RECOVERY_V2) { try { await recoveryMonitor(all, summary, logEvent); } catch (e) { summary.errors.push('monitor: ' + e.message); } }
 
