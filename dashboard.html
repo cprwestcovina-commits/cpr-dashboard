@@ -2302,6 +2302,7 @@ function renderCalendarPage() {
                          : (ct === 'heartsaver' || ct === 'hs') ? 'heartsaver'
                          : (ct === 'acls') ? 'acls'
                          : (ct === 'pals') ? 'pals'
+                         : (ct.includes('redcross') || ct.includes('red_cross') || ct.includes('rcfa') || ct.includes('arc')) ? 'redcross'
                          : '';
           const cls = courseCls;
           // Small course pill next to name (matches the cal-booking border color)
