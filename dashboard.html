@@ -203,6 +203,7 @@
   .pill.heartsaver { background: #E0F2F1; color: #16a085; }
   .pill.acls { background: #F4ECF7; color: #8e44ad; }
   .pill.pals { background: #FDEBD0; color: #d35400; }
+  .pill.redcross { background: #FEF3C7; color: #B45309; }
 
   /* Calendar */
   .calendar-controls {
@@ -1732,7 +1733,7 @@
           </div>
         </div>
         <p style="color:var(--gray-500); font-size:13px; margin-bottom:16px;">
-          Students approaching their 2-year cert renewal (within 90 days). The automated cadence emails + texts them at 90/60/30/15/7/0 days before expiration — each card shows exactly which touches have fired and what's next. Drag cards as you work them manually.
+          Students approaching their 2-year cert renewal, bucketed by how close they are (Upcoming → T-7). The automated cadence emails + texts them at 90/60/30/15/7/0 days before expiration — each card shows which touches have fired and what's next, and shifts columns on its own as the date nears.
         </p>
         <div id="renewalsList"></div>
       </div>
@@ -2098,6 +2099,7 @@ function courseKey(t) {
   if (ct === 'heartsaver' || ct === 'hs') return 'heartsaver';
   if (ct === 'acls') return 'acls';
   if (ct === 'pals') return 'pals';
+  if (ct.includes('redcross') || ct.includes('red_cross') || ct.includes('rcfa') || ct.includes('arc')) return 'redcross';
   return 'bls';
 }
 const COURSE_KEYS = [
@@ -2136,6 +2138,7 @@ function courseLabel(t) {
   if (ct === 'heartsaver' || ct === 'hs') return '<span class="pill heartsaver">HEARTSAVER</span>';
   if (ct === 'acls') return '<span class="pill acls">ACLS</span>';
   if (ct === 'pals') return '<span class="pill pals">PALS</span>';
+  if (ct.includes('redcross') || ct.includes('red_cross') || ct.includes('rcfa') || ct.includes('arc')) return '<span class="pill redcross">RED CROSS</span>';
   if (ct === 'bls') return '<span class="pill bls">BLS</span>';
   return '<span class="pill bls">' + (t ? t.toUpperCase() : 'BLS') + '</span>';
 }
@@ -2306,11 +2309,13 @@ function renderCalendarPage() {
                           : courseCls === 'heartsaver' ? '#16a085'
                           : courseCls === 'acls' ? '#8e44ad'
                           : courseCls === 'pals' ? '#d35400'
+                          : courseCls === 'redcross' ? '#B45309'
                           : 'var(--red)';
           const pillLabel = courseCls === 'renewal' ? 'RNW'
                           : courseCls === 'heartsaver' ? 'HS'
                           : courseCls === 'acls' ? 'ACLS'
                           : courseCls === 'pals' ? 'PALS'
+                          : courseCls === 'redcross' ? 'RC'
                           : 'BLS';
           const coursePill = ` <span style="background:${pillColor}1A;color:${pillColor};padding:0 5px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.3px;">${pillLabel}</span>`;
           const adBadge = r.data.source === 'paid_ad' ? ' <span style="background:#FCEAE8;color:var(--red);padding:0 4px;border-radius:3px;font-size:9px;font-weight:700;">AD</span>' : '';
@@ -2785,7 +2790,9 @@ function openDayDetail(dateStr) {
           const ct = (r.data.course_type || '').replace(/^aha_/, '').toLowerCase();
           const pillLabel = ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal' ? 'RNW'
                           : ct === 'heartsaver' || ct === 'hs' ? 'HS'
-                          : ct === 'acls' ? 'ACLS' : ct === 'pals' ? 'PALS' : 'BLS';
+                          : ct === 'acls' ? 'ACLS' : ct === 'pals' ? 'PALS'
+                          : (ct.includes('redcross') || ct.includes('red_cross') || ct.includes('rcfa') || ct.includes('arc')) ? 'RC'
+                          : 'BLS';
           const ad = r.data.source === 'paid_ad' ? ' <span style="background:#FCEAE8;color:var(--red);padding:0 4px;border-radius:3px;font-size:9px;font-weight:700;">AD</span>' : '';
           return `<tr style="cursor:pointer;border-top:1px solid #E5E7EB;" onclick="document.getElementById('dayDetailModal').style.display='none';openBookingActions('${escapeHtml(r.key)}')">
             <td style="padding:8px;"><strong>${escapeHtml(r.data.time_label || '')}</strong></td>
@@ -3601,7 +3608,7 @@ function renewalCadenceStrip(r) {
     <div style="font-size:10px;color:var(--gray-600);">${nextTxt}</div>`;
 }
 
-function renewalCard(r) {
+function renewalCard(r, tierMode) {
   const stageIdx = RENEWAL_STAGES.findIndex(s => s.key === renewalStageOf(r));
   const isTerminal = stageIdx >= RENEWAL_STAGES.length - 2;  // booked or lost
   const courseLabel = courseLabelFull(r.data.course_type);
@@ -3621,32 +3628,48 @@ function renewalCard(r) {
       ${r.data.phone ? `<a href="tel:${(r.data.phone||'').replace(/\D/g,'')}" class="action-link">${escapeHtml(r.data.phone)}</a>` : ''}
     </div>
     <div class="kb-actions" style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap;">
-      ${!isTerminal && stageIdx < RENEWAL_STAGES.length - 2 ? `<button class="kb-btn advance" onclick="advanceRenewal('${escapeHtml(r.key)}')">Next →</button>` : ''}
-      ${!isTerminal ? `<button class="kb-btn won" onclick="markRenewalBooked('${escapeHtml(r.key)}')" title="They renewed!">🏆 Booked</button>` : ''}
-      ${stageIdx > 0 ? `<button class="kb-btn back" onclick="retreatRenewal('${escapeHtml(r.key)}')">← Back</button>` : ''}
-      ${!isTerminal ? `<button class="kb-btn lost" onclick="markRenewalLost('${escapeHtml(r.key)}')">❌ Lost</button>` : `<button class="kb-btn" onclick="setRenewalStage('${escapeHtml(r.key)}', 'new')">↻ Reopen</button>`}
-      <button class="kb-btn" onclick="openEdit('${escapeHtml(r.key)}')">✏ Edit</button>
+      ${tierMode ? `
+        ${!isTerminal ? `<button class="kb-btn won" onclick="markRenewalBooked('${escapeHtml(r.key)}')" title="They renewed!">🏆 Renewed</button>` : ''}
+        ${!isTerminal ? `<button class="kb-btn lost" onclick="markRenewalLost('${escapeHtml(r.key)}')">❌ Lost</button>` : `<button class="kb-btn" onclick="setRenewalStage('${escapeHtml(r.key)}', 'new')">↻ Reopen</button>`}
+        <button class="kb-btn" onclick="openEdit('${escapeHtml(r.key)}')">✏ Edit</button>
+      ` : `
+        ${!isTerminal && stageIdx < RENEWAL_STAGES.length - 2 ? `<button class="kb-btn advance" onclick="advanceRenewal('${escapeHtml(r.key)}')">Next →</button>` : ''}
+        ${!isTerminal ? `<button class="kb-btn won" onclick="markRenewalBooked('${escapeHtml(r.key)}')" title="They renewed!">🏆 Booked</button>` : ''}
+        ${stageIdx > 0 ? `<button class="kb-btn back" onclick="retreatRenewal('${escapeHtml(r.key)}')">← Back</button>` : ''}
+        ${!isTerminal ? `<button class="kb-btn lost" onclick="markRenewalLost('${escapeHtml(r.key)}')">❌ Lost</button>` : `<button class="kb-btn" onclick="setRenewalStage('${escapeHtml(r.key)}', 'new')">↻ Reopen</button>`}
+        <button class="kb-btn" onclick="openEdit('${escapeHtml(r.key)}')">✏ Edit</button>
+      `}
     </div>
   </div>`;
 }
 
+// Tier board: buckets active renewal candidates by days-until-expiration so you can
+// watch each lead approach its 2-year mark (mirrors the 90/60/30/15/7/0 cadence touches).
+const RENEWAL_TIERS = [
+  { key: 'upcoming', label: '⏳ Upcoming', test: d => d > 90 },
+  { key: 't90',      label: 'T-90',        test: d => d >= 61 && d <= 90 },
+  { key: 't60',      label: 'T-60',        test: d => d >= 31 && d <= 60 },
+  { key: 't30',      label: 'T-30',        test: d => d >= 16 && d <= 30 },
+  { key: 't15',      label: 'T-15',        test: d => d >= 8  && d <= 15 },
+  { key: 't7',       label: 'T-7',         test: d => d >= 0  && d <= 7  },
+];
 function renderRenewalsKanban(rows) {
-  const byStage = {};
-  RENEWAL_STAGES.forEach(s => byStage[s.key] = []);
+  const byTier = {};
+  RENEWAL_TIERS.forEach(t => byTier[t.key] = []);
   rows.forEach(r => {
-    const s = renewalStageOf(r);
-    if (byStage[s]) byStage[s].push(r);
+    const t = RENEWAL_TIERS.find(t => t.test(r.daysUntil));
+    if (t) byTier[t.key].push(r);
   });
-  return `<div class="kanban" style="grid-auto-flow:initial;grid-auto-columns:initial;grid-template-columns:repeat(${RENEWAL_STAGES.length},1fr);overflow-x:visible;">
-    ${RENEWAL_STAGES.map(s => `
+  return `<div class="kanban" style="grid-auto-flow:initial;grid-auto-columns:initial;grid-template-columns:repeat(${RENEWAL_TIERS.length},1fr);overflow-x:auto;">
+    ${RENEWAL_TIERS.map(t => `
       <div class="kb-col">
         <div class="kb-col-header">
-          <span>${s.label}</span>
-          <span class="kb-col-count">${byStage[s.key].length}</span>
+          <span>${t.label}</span>
+          <span class="kb-col-count">${byTier[t.key].length}</span>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;max-height:70vh;overflow-y:auto;padding-right:2px;">
-          ${byStage[s.key].length
-            ? byStage[s.key].map(renewalCard).join('')
+          ${byTier[t.key].length
+            ? byTier[t.key].map(r => renewalCard(r, true)).join('')
             : '<div style="font-size:11px;color:var(--gray-500);text-align:center;padding:20px 0;">empty</div>'}
         </div>
       </div>
@@ -4275,11 +4298,16 @@ function renderRenewalsPage() {
   }
   // Pipeline view: show only past-due (overdue) records in the kanban
   if (getRenewalsView() === 'kanban') {
-    // Only people approaching renewal (within 90 days), not yet expired
-    const upcoming = rows.filter(r => r.daysUntil >= 0 && r.daysUntil <= 90);
+    // Active renewal candidates in the next year, bucketed by days-until-expiration.
+    // Exclude already-expired and anyone already marked Renewed/Lost.
+    const upcoming = rows.filter(r => {
+      if (r.daysUntil < 0 || r.daysUntil > 365) return false;
+      const s = renewalStageOf(r);
+      return s !== 'booked' && s !== 'lost';
+    });
     document.getElementById('renewalsList').innerHTML = upcoming.length
-      ? `<p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">${upcoming.length} renewals within 90 days (soonest first). Already-expired students are excluded.</p>` + renderRenewalsKanban(upcoming)
-      : '<div class="empty">No renewals within the next 90 days. Students appear here as they approach their 2-year mark.</div>';
+      ? `<p style="font-size:12px;color:var(--gray-500);margin:0 0 12px;">${upcoming.length} renewals in the next year, bucketed by days until their 2-year mark. Cards shift columns automatically as the date nears; the cadence emails/texts at 90/60/30/15/7/0.</p>` + renderRenewalsKanban(upcoming)
+      : '<div class="empty">No renewals in the next year. Students appear here as they approach their 2-year mark.</div>';
     return;
   }
   document.getElementById('renewalsList').innerHTML = rows.length
