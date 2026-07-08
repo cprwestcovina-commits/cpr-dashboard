@@ -324,6 +324,12 @@ function to24(s) {
   if (p === 'AM' && h === 12) h = 0;
   return String(h).padStart(2, '0') + ':' + min;
 }
+// Build an ISO 8601 datetime with explicit Pacific offset so Make doesn't re-interpret the time as UTC.
+// Uses -07:00 (PDT, Apr–Oct) year-round — close enough for class scheduling purposes.
+function toEventISO(date, time24) {
+  if (!date || !time24) return null;
+  return `${date}T${time24}:00-07:00`;
+}
 // Match completed Square payments (from the payment webhook log) to pending leads and confirm them.
 // Mirrors the dashboard's auto-reconcile, including the ≥130-point match threshold.
 async function reconcileSquarePayments(all, summary) {
@@ -384,7 +390,8 @@ async function reconcileSquarePayments(all, summary) {
     if (isRecovery) summary.rcvRedeemed = (summary.rcvRedeemed || 0) + 1;
     summary.events.push({ ts: new Date().toISOString(), level: 'info', src: 'payment', msg: `confirmed ${u.email || d.email}${isRecovery ? ' 🎟️ via recovery link' : ''}` });
     const idx = pending.indexOf(r); if (idx >= 0) pending.splice(idx, 1);
-    await fireWebhook(CONFIRM_HOOK, { ...r.data, time_label_24: to24(r.data.time_label), time_end_24: to24(r.data.time_end) });
+    const t24s = to24(r.data.time_label), t24e = to24(r.data.time_end);
+    await fireWebhook(CONFIRM_HOOK, { ...r.data, time_label_24: t24s, time_end_24: t24e, event_start_iso: toEventISO(r.data.date, t24s), event_end_iso: toEventISO(r.data.date, t24e) });
     summary.reconciled++;
   }
 }
