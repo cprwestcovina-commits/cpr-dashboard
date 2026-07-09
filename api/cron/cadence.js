@@ -312,6 +312,35 @@ async function patchFlag(key, fullData, additions) {
 }
 
 const CONFIRM_HOOK = 'https://hook.us2.make.com/v4uxgw7pstxpcjmg63iii2dcy837kcwj';
+
+// Server-side GA4 Measurement Protocol — fires a purchase event for renewal bookings
+// so Google Ads gets the conversion even when Square opens in a new tab (no redirect).
+// Requires GA4_API_SECRET env var (GA4 → Admin → Data Streams → Measurement Protocol API secrets).
+const GA4_MEASUREMENT_ID = 'G-CZ4Y22LGMY';
+const GA4_API_SECRET = process.env.GA4_API_SECRET || '';
+async function fireGa4RenewalConversion(d, squarePaymentId) {
+  if (!GA4_API_SECRET) return false;
+  const clientId = d.ga4_client_id || ('server-' + (d.email || d.booking_id || 'unknown').replace(/[^a-z0-9]/gi, ''));
+  try {
+    const body = {
+      client_id: clientId,
+      events: [{
+        name: 'purchase',
+        params: {
+          transaction_id: squarePaymentId || d.booking_id || d.square_payment_id,
+          value: parseFloat(d.total || '89'),
+          currency: d.currency || 'USD',
+          items: [{ item_id: 'bls_renewal', item_name: 'BLS Renewal', price: parseFloat(d.total || '89'), quantity: 1 }],
+        },
+      }],
+    };
+    const res = await fetch(
+      `https://www.google-analytics.com/mp/collect?measurement_id=${GA4_MEASUREMENT_ID}&api_secret=${GA4_API_SECRET}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    );
+    return res.status === 204;
+  } catch (e) { return false; }
+}
 async function makeGet(path) {
   const r = await fetch(`https://us2.make.com/api/v2${path}`, { headers: { 'Authorization': `Token ${MAKE_TOKEN}` } });
   return r.json();
@@ -392,6 +421,11 @@ async function reconcileSquarePayments(all, summary) {
     const idx = pending.indexOf(r); if (idx >= 0) pending.splice(idx, 1);
     const t24s = to24(r.data.time_label), t24e = to24(r.data.time_end);
     await fireWebhook(CONFIRM_HOOK, { ...r.data, time_label_24: t24s, time_end_24: t24e, event_start_iso: toEventISO(r.data.date, t24s), event_end_iso: toEventISO(r.data.date, t24e) });
+    const ct = (r.data.course_type || '').toLowerCase();
+    if (ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') {
+      const ok = await fireGa4RenewalConversion(r.data, u.id);
+      summary.events.push({ ts: new Date().toISOString(), level: 'info', src: 'ga4_conv', msg: `renewal GA4 conversion ${ok ? 'fired' : 'skipped (no secret)'}` });
+    }
     summary.reconciled++;
   }
 }
