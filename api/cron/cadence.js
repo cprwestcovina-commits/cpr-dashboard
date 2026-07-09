@@ -318,9 +318,14 @@ const CONFIRM_HOOK = 'https://hook.us2.make.com/v4uxgw7pstxpcjmg63iii2dcy837kcwj
 // Requires GA4_API_SECRET env var (GA4 → Admin → Data Streams → Measurement Protocol API secrets).
 const GA4_MEASUREMENT_ID = 'G-CZ4Y22LGMY';
 const GA4_API_SECRET = process.env.GA4_API_SECRET || '';
-async function fireGa4RenewalConversion(d, squarePaymentId) {
+async function fireGa4Conversion(d, squarePaymentId) {
   if (!GA4_API_SECRET) return false;
   const clientId = d.ga4_client_id || ('server-' + (d.email || d.booking_id || 'unknown').replace(/[^a-z0-9]/gi, ''));
+  const ct = (d.course_type || 'bls').toLowerCase();
+  const isRenewal = ct.includes('renewal') || ct === 'rnw';
+  const itemId = isRenewal ? 'bls_renewal' : 'bls_cert';
+  const itemName = isRenewal ? 'BLS Renewal' : 'BLS Certification';
+  const price = parseFloat(d.total || (isRenewal ? '89' : '89'));
   try {
     const body = {
       client_id: clientId,
@@ -328,9 +333,9 @@ async function fireGa4RenewalConversion(d, squarePaymentId) {
         name: 'purchase',
         params: {
           transaction_id: squarePaymentId || d.booking_id || d.square_payment_id,
-          value: parseFloat(d.total || '89'),
+          value: price,
           currency: d.currency || 'USD',
-          items: [{ item_id: 'bls_renewal', item_name: 'BLS Renewal', price: parseFloat(d.total || '89'), quantity: 1 }],
+          items: [{ item_id: itemId, item_name: itemName, price, quantity: 1 }],
         },
       }],
     };
@@ -422,9 +427,9 @@ async function reconcileSquarePayments(all, summary) {
     const t24s = to24(r.data.time_label), t24e = to24(r.data.time_end);
     await fireWebhook(CONFIRM_HOOK, { ...r.data, time_label_24: t24s, time_end_24: t24e, event_start_iso: toEventISO(r.data.date, t24s), event_end_iso: toEventISO(r.data.date, t24e) });
     const ct = (r.data.course_type || '').toLowerCase();
-    if (ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') {
-      const ok = await fireGa4RenewalConversion(r.data, u.id);
-      summary.events.push({ ts: new Date().toISOString(), level: 'info', src: 'ga4_conv', msg: `renewal GA4 conversion ${ok ? 'fired' : 'skipped (no secret)'}` });
+    if (ct === 'bls' || ct === 'renewal' || ct === 'rnw' || ct === 'bls_renewal') {
+      const ok = await fireGa4Conversion(r.data, u.id);
+      summary.events.push({ ts: new Date().toISOString(), level: 'info', src: 'ga4_conv', msg: `${ct} GA4 conversion ${ok ? 'fired' : 'skipped (no secret)'}` });
     }
     summary.reconciled++;
   }

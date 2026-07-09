@@ -870,6 +870,7 @@ function initiatePayment() {
   const trackUtmTerm     = __getTrack('utm_term');
   const trackLandingUrl  = (() => { try { return sessionStorage.getItem('landing_url') || location.href; } catch(_) { return location.href; } })();
   try { if (!sessionStorage.getItem('landing_url')) sessionStorage.setItem('landing_url', location.href); } catch(_) {}
+  const trackGa4ClientId = (() => { try { const m = document.cookie.match(/_ga=GA\d+\.\d+\.(\d+\.\d+)/); return m ? m[1] : ''; } catch(_) { return ''; } })();
 
   const booking_id = 'bls-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
   const booking = {
@@ -937,6 +938,7 @@ function initiatePayment() {
       source: (trackGclid ? 'paid_ad' : (new URLSearchParams(location.search).get('src') || 'paid_ad')),
     sms_consent: (document.getElementById('smsConsent') && document.getElementById('smsConsent').checked) ? 'yes' : 'no',
       gclid: trackGclid,
+      ga4_client_id: trackGa4ClientId,
       utm_source: trackUtmSource,
       utm_campaign: trackUtmCampaign,
       utm_medium: trackUtmMedium,

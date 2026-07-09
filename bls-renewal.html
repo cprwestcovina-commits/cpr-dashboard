@@ -775,11 +775,15 @@ function initiatePayment() {
   const email = document.getElementById('email').value.trim();
   const phone = document.getElementById('phone').value.trim();
 
-  // Ad-tracking params — read URL on first visit, cache in sessionStorage
+  // Ad-tracking params — read URL on first visit, persist in localStorage (30 days) so gclid
+  // survives tab closes and cross-page visits (e.g. user hits renewal page from ad, then books
+  // on the main cert page from a fresh tab — gclid still attributes back to the ad click).
   const __urlParams = new URLSearchParams(location.search);
+  const __TRACK_TTL = 30 * 86400000;
   const __getTrack = (key) => {
     const v = __urlParams.get(key);
-    if (v) { try { sessionStorage.setItem('track_' + key, v); } catch(_) {} return v; }
+    if (v) { try { localStorage.setItem('cprwc_t_' + key, JSON.stringify({ v: v, t: Date.now() })); } catch(_) {} return v; }
+    try { const s = JSON.parse(localStorage.getItem('cprwc_t_' + key) || 'null'); if (s && Date.now() - s.t < __TRACK_TTL) return s.v; } catch(_) {}
     try { return sessionStorage.getItem('track_' + key) || ''; } catch(_) { return ''; }
   };
   const trackGclid       = __getTrack('gclid');
