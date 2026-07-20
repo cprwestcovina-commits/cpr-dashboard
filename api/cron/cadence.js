@@ -71,8 +71,19 @@ function rcvNormCourse(ct) {
   if (c === 'hs' || c === 'heartsaver_spanish') return 'heartsaver';
   if (c === 'bls_heartcode' || c === 'bls_spanish') return 'bls';
   if (c.startsWith('redcross')) return 'redcross';
+  if (c === 'acls_pals_bundle') return 'acls';
   if (['bls', 'heartsaver', 'acls', 'pals'].includes(c)) return c;
   return 'bls';
+}
+// $125 ACLS Summer Launch (Jul-Aug 2026): leads from the PAID-ADS ACLS funnel
+// (ads landing page sends offer=acls_summer_launch_125, source/ref=paid_ad)
+// already have the launch price - never send them promo codes. Main-site ACLS
+// leads (organic, $250) keep the normal codes. Remove this gate when the
+// launch ends and ACLS returns to $250.
+function isAdsAclsLead(d) {
+  const ct = ((d && d.course_type) || '').toLowerCase();
+  if (!/acls/.test(ct)) return false;
+  return (d && (d.offer === 'acls_summer_launch_125' || d.source === 'paid_ad' || d.ref === 'paid_ad')) ? true : false;
 }
 function recoveryAmount(ct, idx) { return (RECOVERY_LADDER[rcvNormCourse(ct)] || RECOVERY_LADDER.bls)[idx]; }
 function recoveryWidget(ct) {
@@ -136,6 +147,7 @@ function courseLabel(ct) {
   if (c === 'heartsaver_spanish') return 'Heartsaver (Spanish)';
   if (c.startsWith('redcross')) return 'Red Cross First Aid/CPR/AED';
   if (c === 'heartsaver' || c === 'hs') return 'Heartsaver';
+  if (c === 'acls_pals_bundle') return 'ACLS + PALS';
   if (c === 'acls') return 'ACLS';
   if (c === 'pals') return 'PALS';
   return 'BLS';
@@ -699,7 +711,7 @@ export default async function handler(req, res) {
       // Only the single tier whose window contains the lead's age fires (backfill-safe: a lead
       // who enters mid-cadence gets only its current tier, never a stale "24h" offer).
       const tier = RECOVERY_TIERS.find(t => age >= t.from && age < t.to);
-      if (tier) {
+      if (tier && !isAdsAclsLead(d)) {
         const amount = recoveryAmount(d.course_type, tier.idx);
         const expiry = Date.now() + tier.validDays * 86400000;
         const flagE = `rcv_${tier.key}_email`, flagS = `rcv_${tier.key}_sms`;
@@ -765,7 +777,7 @@ export default async function handler(req, res) {
     }
 
     // Day 5 email — fire webhook + PATCH flag directly (don't rely on Make scenario to flag)
-    if (age >= 120 && age <= 720 && !isRedCross && d.comeback30_sent !== 'yes') {
+    if (age >= 120 && age <= 720 && !isRedCross && !isAdsAclsLead(d) && d.comeback30_sent !== 'yes') {
       const d5Payload = { ...payload, promo_code: recoveryCode(d.course_type), book_url: recoveryBookUrl(d.course_type, 'd5email') };
       if (await fireWebhook(D5_EMAIL_HOOK, d5Payload)) {
         await patchFlag(lead.key, d, { comeback30_sent: 'yes', lead_stage: 'email2' });
@@ -774,7 +786,7 @@ export default async function handler(req, res) {
     }
 
     // Day 5 SMS
-    if (age >= 120 && age <= 720 && !isRedCross && d.nudge_d5sms_sent !== 'yes') {
+    if (age >= 120 && age <= 720 && !isRedCross && !isAdsAclsLead(d) && d.nudge_d5sms_sent !== 'yes') {
       const msg = `Hi ${payload.first_name},\n\nCaroline here. I held a seat for ${courseLabel(payload.course_type)} on ${payload.date_formatted}.\n\nUse code ${recoveryCode(payload.course_type)} at checkout for $30 off - expires soon.\n\nReply STOP to opt out.`;
       const r = await sendSmsIfAllowed(payload, msg);
       if (r === 'sent') {
@@ -786,7 +798,7 @@ export default async function handler(req, res) {
     }
 
     // Day 7 ACLS/PALS SMS
-    if (isAclsPals && age >= 156 && age <= 180 && d.nudge_d7sms_sent !== 'yes') {
+    if (isAclsPals && !isAdsAclsLead(d) && age >= 156 && age <= 180 && d.nudge_d7sms_sent !== 'yes') {
       const code = /pals/i.test(d.course_type) ? 'PALS25' : 'ACLS25';
       const msg = `Hi ${payload.first_name},\n\nCaroline. Final reminder for ${courseLabel(payload.course_type)} on ${payload.date_formatted}.\n\nUse code ${code} for $25 off. Call (626) 605-2067 to confirm.\n\nReply STOP to opt out.`;
       const r = await sendSmsIfAllowed(payload, msg);
