@@ -683,6 +683,7 @@ export default async function handler(req, res) {
       time_label: d.time_label || '',
       course_type: d.course_type || 'bls',
       sms_consent: d.sms_consent,
+      offer: d.offer || '', // ads-funnel marker: Make templates hide promo blocks for acls_summer_launch_125
     };
     const isAclsPals = /acls|pals/i.test(d.course_type || '');
     const isRedCross = /redcross/i.test(d.course_type || ''); // RC capped at $5-$10; skip the $30 Day-5 offers
